@@ -4,85 +4,61 @@
 
 #include "SimpleGraph.h"
 #include "SimpleEstimator.h"
+#include <math.h>
 
 SimpleEstimator::SimpleEstimator(std::shared_ptr<SimpleGraph> &g){
 
     // works only with SimpleGraph
     graph = g;
-
-    std::cout << "complexity: vertices: " << g->getNoVertices() << ", edges: " << g->getNoEdges() << ", labels: " << g->getNoLabels() << std::endl;
-    std::cout << std::endl;
 }
 
 void SimpleEstimator::prepare() {
+    // Initialize the data structures containing the desired data.
+    vertexData = std::vector<vertexStat>(graph -> getNoVertices());
+    labelData = std::vector<labelStat>(graph -> getNoLabels());
 
-    // do your prep here
+    // We want to gather the in and out degrees of the vertices in the graph.
+    // Next to that, per label, we want to gather the set of distinct source and target vertices,
+    // and the non-distinct count of source and target vertices.
+    for(uint32_t i = 0; i < graph -> getNoVertices(); i++) {
+        // The in and out degree correspond with the lengths of the results given in the adjacency matrices.
+        vertexData[i].inDegree = static_cast<uint32_t>(graph -> adj[i].size());
+        vertexData[i].outDegree = static_cast<uint32_t>(graph -> reverse_adj[i].size());
 
-    // Notes: good to know, in the pair, first is the label name and second is the target.
-    distinctSourceVerticesPerLabel = std::vector<std::unordered_set<int>>(graph -> getNoLabels());
-    distinctTargetVerticesPerLabel = std::vector<std::unordered_set<int>>(graph -> getNoLabels());
-    totalEdgesPerLabel = std::vector<int>(graph -> getNoLabels());
-
-    // Also note down the distinct vertices that concatenate two labels.
-    distinctVerticesPerLabelPair = std::vector<std::vector<std::unordered_set<int>>>(graph -> getNoLabels(), std::vector<std::unordered_set<int>>(graph -> getNoLabels()));
-
-    // Now, for each vertex, get the vertices it is connected to with the label.
-    for(int i = 0; i < graph -> getNoVertices(); i++) {
-        // Loop over all edges starting at node i.
+        // Now use the entries in the adjacency matrix to calculate the label data.
         for(auto v : graph -> adj[i]) {
-            // It starts in i, and ends in v.second with label v.first.
-            distinctSourceVerticesPerLabel[v.first].insert(i);
-            distinctTargetVerticesPerLabel[v.first].insert(v.second);
-            totalEdgesPerLabel[v.first] += 1;
+            labelData[v.first].noEdges++;
+            labelData[v.first].distinctSources.insert(i);
+            labelData[v.first].distinctTargets.insert(v.second);
 
-            // We also want to iterate over all edges ending in node i.
-            for(auto w : graph -> reverse_adj[i]) {
-                // so we know that i is at the end of w, and at the start of v. So add it to the correct set.
-                distinctVerticesPerLabelPair[w.first][v.first].insert(i);
-            }
+            // Also update the appropriate in and out degree counters in the vertex data.
+            ++vertexData[i].labelOutDegrees[v.first];
+            ++vertexData[v.second].labelInDegrees[v.first];
         }
     }
-
-    // Print the lengths of all the sets.
-    for(int i = 0; i < graph -> getNoLabels(); i++) {
-        std::cout << "Label " << i << " has "
-                  << distinctSourceVerticesPerLabel[i].size() << " unique starting points." << std::endl;
-        std::cout << "Label " << i << " has "
-                  << distinctTargetVerticesPerLabel[i].size() << " unique end points." << std::endl;
-        std::cout << "Label " << i << " is used by "
-                  << totalEdgesPerLabel[i] << " edges." << std::endl;
-        std::cout << std::endl;
-    }
-
-    // Now, print a table containing all relay data.
-    std::cout << "Table containing the amount of vertices that may connect label 1 to label 2." << std::endl;
-    for(int i = 0; i < graph -> getNoLabels(); i++) {
-        for(int j = 0; j < graph -> getNoLabels(); j++) {
-            std::cout << distinctVerticesPerLabelPair[i][j].size() << " \t\t";
-        }
-        std::cout << std::endl;
-    }
-    std::cout << std::endl;
 }
 
 cardStat SimpleEstimator::estimate(RPQTree *q) {
+    // Convert the parse tree to a more straightforward form to work with, a list.
     std::vector<std::pair<int, bool>> result = parseTreeToList(q);
 
-    // Set the s and t cardinality, using the flag inwards and outwards data.
-    auto s = result.front().second ?
-                      distinctSourceVerticesPerLabel[result.front().first].size() :
-                      distinctTargetVerticesPerLabel[result.front().first].size();
-    auto t = !result.back().second ?
-                      distinctSourceVerticesPerLabel[result.back().first].size() :
-                      distinctTargetVerticesPerLabel[result.back().first].size();
+    // We have to keep in mind that we can also move in opposite direction.
 
-    std::cout << std::endl << "Linear list representation of query: ";
-    for (const auto &i: result)
-        std::cout << i.first << "-" << i.second << ' ';
+    // Start with estimating s and t.
+    auto s = (result.front().second ? labelData[result.front().first].distinctSources : labelData[result.front().first].distinctTargets).size();
+    auto t = (result.back().second ? labelData[result.back().first].distinctTargets : labelData[result.back().first].distinctSources).size();
+
+    // To estimate the number of paths, use the average degree of source vertices bearing the label.
+    float noPaths = labelData[result[0].first].noEdges;
+
     std::cout << std::endl;
+    for(int i = 1; i < result.size(); i++) {
+        auto l = result[i];
+        noPaths *= ((float) labelData[l.first].noEdges) / (l.second ? labelData[l.first].distinctTargets : labelData[l.first].distinctSources).size();
+    }
 
     // perform your estimation here
-    return cardStat {static_cast<uint32_t>(s), 0, static_cast<uint32_t>(t)};
+    return cardStat {static_cast<uint32_t>(s), static_cast<uint32_t>(noPaths), static_cast<uint32_t>(t)};
 }
 
 std::vector<std::pair<int, bool>> SimpleEstimator::parseTreeToList(RPQTree *q) {
