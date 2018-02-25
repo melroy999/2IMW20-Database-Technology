@@ -13,20 +13,26 @@ SimpleEstimator::SimpleEstimator(std::shared_ptr<SimpleGraph> &g){
 }
 
 void SimpleEstimator::prepare() {
-    // Initialize the data structures containing the desired data.
+
+    // Initialise vectors with lengths corresponding to num vertices or labels.
     vertexData = std::vector<vertexStat>(graph -> getNoVertices());
     labelData = std::vector<labelStat>(graph -> getNoLabels());
 
-    // We want to gather the in and out degrees of the vertices in the graph.
-    // Next to that, per label, we want to gather the set of distinct source and target vertices,
-    // and the non-distinct count of source and target vertices.
+    /*
+     * Gather the in and out degrees of the vertices in the graph.
+     * Next to that, per label, gather the set of distinct source and target vertices,
+     * and the non-distinct count of source and target vertices.
+     */
     for(uint32_t i = 0; i < graph -> getNoVertices(); i++) {
-        // The in and out degree correspond with the lengths of the results given in the adjacency matrices.
+
+        // The in and out degree corresponds to the lengths of the results given in the adjacency matrices.
         vertexData[i].inDegree = static_cast<uint32_t>(graph -> adj[i].size());
         vertexData[i].outDegree = static_cast<uint32_t>(graph -> reverse_adj[i].size());
 
         // Now use the entries in the adjacency matrix to calculate the label data.
         for(auto v : graph -> adj[i]) {
+
+            // In the adjacency matrix, 'first' is the edge label, 'second' is the target vertex.
             labelData[v.first].noEdges++;
             labelData[v.first].distinctSources.insert(i);
             labelData[v.first].distinctTargets.insert(v.second);
@@ -39,12 +45,14 @@ void SimpleEstimator::prepare() {
 }
 
 cardStat SimpleEstimator::estimate(RPQTree *q) {
-    // Convert the parse tree to a more straightforward form to work with, a list.
+
+    // Convert the parse tree to a more straightforward form to work with i.e. a list.
     std::vector<std::pair<int, bool>> result = parseTreeToList(q);
 
-    // We have to keep in mind that we can also move in opposite direction.
-
-    // Start with estimating s and t.
+    /*
+     * We can move in two directions: forward and backwards. We start by estimating s and t by
+     * getting the number of distinct sources/targets of the first and last label in the chain respectively.
+     */
     auto s = (result.front().second ? labelData[result.front().first].distinctSources : labelData[result.front().first].distinctTargets).size();
     auto t = (result.back().second ? labelData[result.back().first].distinctTargets : labelData[result.back().first].distinctSources).size();
 
@@ -53,15 +61,22 @@ cardStat SimpleEstimator::estimate(RPQTree *q) {
 
     std::cout << std::endl;
     for(int i = 1; i < result.size(); i++) {
+
         auto l = result[i];
         noPaths *= ((float) labelData[l.first].noEdges) / (l.second ? labelData[l.first].distinctTargets : labelData[l.first].distinctSources).size();
     }
 
-    // perform your estimation here
+    // Return the estimate in the form {#outNodes, #paths, #inNodes}
     return cardStat {static_cast<uint32_t>(s), static_cast<uint32_t>(noPaths), static_cast<uint32_t>(t)};
 }
 
+/**
+ * Convert the RPQTree to a vector representation of pairs of labels and directions
+ * @param q - the tree
+ * @return the vector list of labels
+ */
 std::vector<std::pair<int, bool>> SimpleEstimator::parseTreeToList(RPQTree *q) {
+
     // Create a vector that will contain the result.
     std::vector<std::pair<int, bool>> result;
 
@@ -71,19 +86,24 @@ std::vector<std::pair<int, bool>> SimpleEstimator::parseTreeToList(RPQTree *q) {
 
     // Do breadth first search.
     while(!visited.empty()) {
+
         // Pop the current top node.
         RPQTree* current = visited.top();
         visited.pop();
 
         if(current->isLeaf()) {
+
             std::string data = current->data;
             result.emplace_back(std::stoi(data.substr(0, data.size() - 1)), data.back() == '+');
         } else {
+
             if(current->right != nullptr) {
+
                 visited.push(current->right);
             }
 
             if(current->left != nullptr) {
+
                 visited.push(current->left);
             }
         }
