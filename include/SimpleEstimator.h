@@ -10,10 +10,6 @@
 
 // A data structure holding information about vertices in the graph.
 struct vertexStat {
-    // The in and out degree of the vertex.
-    uint32_t outDegree;
-    uint32_t inDegree;
-
     // Also keep the in and out degree of each individual label.
     std::map<uint32_t, uint32_t> labelOutDegrees;
     std::map<uint32_t, uint32_t> labelInDegrees;
@@ -28,13 +24,27 @@ struct labelStat {
     // The total number of edges bearing this label.
     uint32_t noEdges;
 
-    // To make the estimates more exact, we track how often the specific label is successor or predecessor by another label.
-    std::map<uint32_t, uint32_t> noSuccessorEdgesPerLabel;
-    std::map<uint32_t, uint32_t> noPredecessorEdgesPerLabel;
+    /*
+     * The in and out degrees of the source/target nodes of the label, represented as a frequency map.
+     * In these mappings, the key is the in/out degree and the value is the amount of vertices having the in/out degree.
+     */
+    std::map<uint32_t, uint32_t> sourceOutFrequencies;
+    std::map<uint32_t, uint32_t> targetInFrequencies;
 
-    // We track which if the source vertices/target vertices have access to edges bearing labels of the specified value.
-    std::map<uint32_t, std::unordered_set<uint32_t>> distinctSourcesPerSuccessorLabel;
-    std::map<uint32_t, std::unordered_set<uint32_t>> distinctTargetsPerPredecessorLabel;
+    /*
+     * Count how many of the target vertices are followed by an edge having the specified label.
+     * The key -1 denotes the number of vertices not followed by an edge.
+     */
+    std::map<int, std::unordered_set<uint32_t>> distinctTargetNodesFollowedByLabel;
+    std::map<uint32_t, uint32_t> noEdgesFollowingTargetNodesByLabel;
+
+    /*
+     * Count how many of the source vertices are followed by an edge having the specified label,
+     * after the application of the current label.
+     */
+    std::map<int, std::unordered_set<uint32_t>> distinctSourceNodesFollowedByLabel;
+    std::map<uint32_t, uint32_t> noEdgesFollowingSourceNodesByLabel;
+
 };
 
 

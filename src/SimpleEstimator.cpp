@@ -19,15 +19,10 @@ void SimpleEstimator::prepare() {
     labelData = std::vector<labelStat>(graph -> getNoLabels());
 
     /*
-     * Gather the in and out degrees of the vertices in the graph.
-     * Next to that, per label, gather the set of distinct source and target vertices,
+     * Per label, gather the set of distinct source and target vertices,
      * and the non-distinct count of source and target vertices.
      */
     for(uint32_t i = 0; i < graph -> getNoVertices(); i++) {
-
-        // The in and out degree corresponds to the lengths of the results given in the adjacency matrices.
-        vertexData[i].outDegree = static_cast<uint32_t>(graph -> adj[i].size());
-        vertexData[i].inDegree = static_cast<uint32_t>(graph -> reverse_adj[i].size());
 
         // Now use the entries in the adjacency matrix to calculate the label data.
         for(auto v : graph -> adj[i]) {
@@ -44,24 +39,47 @@ void SimpleEstimator::prepare() {
     }
 
     /*
-     * For each of the labels in the dataset, count the number of edges that succeed or proceed edges using the label,
-     * subdivided by the label used by the succeeding or proceeding edges.
+     * With the vertex data complete, we can process the remaining label data.
+     * First, we want to gather the in and out degree of the target and source nodes respectively,
+     * in the form of a frequency table.
+     */
+    for(auto v : vertexData) {
+
+        /*
+         * For each key-value pair in the in/out degree data, update the appropriate label frequency measurements.
+         * In the degree mapping, 'first' is the label id, and 'second' is the degree.
+         */
+        for(auto w : v.labelOutDegrees) {
+            labelData[w.first].sourceOutFrequencies[w.second] += 1;
+        }
+        for(auto w : v.labelInDegrees) {
+            labelData[w.first].targetInFrequencies[w.second] += 1;
+        }
+    }
+
+    /*
+     * Gather the distinct target labels that are followed by an edge with a given label.
+     * Next to that, also note down the number of edges with the given label originate from the target vertices.
+     * Finally, we note down the distinct source nodes that,
+     * after the application of this label, lead to edges with a given label.
      */
     for(uint32_t i = 0; i < graph -> getNoLabels(); i++) {
-
-        // For each of the target vertices, count the number of outgoing edges per label type.
         for(auto v : labelData[i].distinctTargets) {
-            for(auto w : vertexData[v].labelOutDegrees) {
-                labelData[i].noSuccessorEdgesPerLabel[w.first] += w.second;
-                labelData[i].distinctSourcesPerSuccessorLabel[w.first].insert(v);
+            if(vertexData[v].labelOutDegrees.empty()) {
+                labelData[i].distinctTargetNodesFollowedByLabel[-1].insert(v);
+            }
+            for(auto w: vertexData[v].labelOutDegrees) {
+                labelData[i].distinctTargetNodesFollowedByLabel[w.first].insert(v);
+                labelData[i].noEdgesFollowingTargetNodesByLabel[w.first] += w.second;
             }
         }
 
-        // For each of the source vertices, count the number of ingoing edges per label type.
         for(auto v : labelData[i].distinctSources) {
-            for(auto w : vertexData[v].labelInDegrees) {
-                labelData[i].noPredecessorEdgesPerLabel[w.first] += w.second;
-                labelData[i].distinctTargetsPerPredecessorLabel[w.first].insert(v);
+            for(auto w : graph -> adj[v]) {
+                for(auto u: vertexData[w.second].labelOutDegrees) {
+                    labelData[i].distinctSourceNodesFollowedByLabel[u.first].insert(v);
+                    labelData[i].noEdgesFollowingSourceNodesByLabel[u.first] += u.second;
+                }
             }
         }
     }
@@ -91,25 +109,6 @@ cardStat SimpleEstimator::estimate(RPQTree *q) {
 
         auto l = result[i];
         noPaths *= ((float) labelData[l.first].noEdges) / (l.second ? labelData[l.first].distinctTargets : labelData[l.first].distinctSources).size();
-
-//        if(l.second) {
-//            /*
-//             * We traverse the edge in expected direction, so we should use the successor value.
-//             *
-//             * Instead of using the rough distinct targets of the label,
-//             * we check how many successor edges the predecessor label has with the desired label.
-//             */
-//            noPaths *= ((float) labelData[result[i-1].first].noSuccessorEdgesPerLabel[l.first]) / labelData[result[i-1].first].distinctSourcesPerSuccessorLabel[l.first].size();
-//
-//        } else {
-//            /*
-//             * We traverse the edge in opposite direction, so we should use the predecessor value.
-//             *
-//             * Instead of using the rough distinct sources of the label,
-//             * we check how many predecessor edges the successor label has with the desired label.
-//             */
-//            noPaths *= ((float) labelData[result[i-1].first].noPredecessorEdgesPerLabel[l.first]) / labelData[result[i-1].first].distinctTargetsPerPredecessorLabel[l.first].size();
-//        }
     }
 
     // Return the estimate in the form {#outNodes, #paths, #inNodes}
@@ -166,25 +165,59 @@ void SimpleEstimator::printDebugData() {
     std::cout << std::endl;
     for(uint32_t i = 0; i < graph -> getNoLabels(); i++) {
         auto v = labelData[i];
+
         std::cout << "Label " << i << ":" << std::endl;
         std::cout << "\t- is used by " << v.noEdges << " edges." << std::endl;
         std::cout << "\t- has " << v.distinctSources.size() << " distinct sources." << std::endl;
         std::cout << "\t- has " << v.distinctTargets.size() << " distinct targets." << std::endl;
 
-        std::cout << "\t- is succeeded by:" << std::endl;
-        for(auto w : v.noSuccessorEdgesPerLabel) {
-            std::cout << "\t\t- " << w.second << " edges with label " << w.first << ", originating from "
-                      << v.distinctSourcesPerSuccessorLabel[w.first].size() << " distinct vertices, with "
-                      << labelData[w.first].distinctSources.size() << " available vertices." << std::endl;
+        std::cout << "\t- Source-out frequencies (frequency*{id}):" << std::endl << "\t\t[";
+        int sum = 0;
+        for (auto iter = v.sourceOutFrequencies.begin(); iter != v.sourceOutFrequencies.end(); iter++) {
+            if (iter != v.sourceOutFrequencies.begin()) std::cout << ", ";
+            std::cout << iter -> second << "*{" << iter -> first << "}";
+            sum += iter -> first * iter -> second;
         }
+        std::cout << "]"  << std::endl << "\t\tsum = " << sum << std::endl;
 
-        std::cout << "\t- is proceeded by:" << std::endl;
-        for(auto w : v.noPredecessorEdgesPerLabel) {
-            std::cout << "\t\t- " << w.second << " edges with label " << w.first << ", terminating in "
-                      << v.distinctTargetsPerPredecessorLabel[w.first].size() << " distinct vertices, with "
-                      << labelData[w.first].distinctTargets.size() << " available vertices." << std::endl;
+        sum = 0;
+        std::cout << "\t- Target-in frequencies (frequency*{id}):" << std::endl << "\t\t[";
+        for (auto iter = v.targetInFrequencies.begin(); iter != v.targetInFrequencies.end(); iter++) {
+            if (iter != v.targetInFrequencies.begin()) std::cout << ", ";
+            std::cout << iter -> second << "*{" << iter -> first << "}";
+            sum += iter -> first * iter -> second;
         }
-        std::cout << std::endl;
+        std::cout << "]"  << std::endl << "\t\tsum = " << sum << std::endl;
+
+        std::cout << "\t- Distinct target nodes followed by an edge with the given label (distinct targets*{label}):" << std::endl << "\t\t[";
+        for (auto iter = v.distinctTargetNodesFollowedByLabel.begin(); iter != v.distinctTargetNodesFollowedByLabel.end(); iter++) {
+            if (iter != v.distinctTargetNodesFollowedByLabel.begin()) std::cout << ", ";
+            std::cout << iter -> second.size() << "*{" << iter -> first << "}";
+        }
+        std::cout << "]"  << std::endl;
+
+        std::cout << "\t- Number of edges with the given label following the target nodes (noEdges*{label}):" << std::endl << "\t\t[";
+        for (auto iter = v.noEdgesFollowingTargetNodesByLabel.begin(); iter != v.noEdgesFollowingTargetNodesByLabel.end(); iter++) {
+            if (iter != v.noEdgesFollowingTargetNodesByLabel.begin()) std::cout << ", ";
+            std::cout << iter -> second << "*{" << iter -> first << "}";
+        }
+        std::cout << "]"  << std::endl;
+
+
+        std::cout << "\t- Distinct source nodes followed by the current label, "
+                "followed by an edge with the given label (distinct sources*{label}):" << std::endl << "\t\t[";
+        for (auto iter = v.distinctSourceNodesFollowedByLabel.begin(); iter != v.distinctSourceNodesFollowedByLabel.end(); iter++) {
+            if (iter != v.distinctSourceNodesFollowedByLabel.begin()) std::cout << ", ";
+            std::cout << iter -> second.size() << "*{" << iter -> first << "}";
+        }
+        std::cout << "]"  << std::endl;
+
+        std::cout << "\t- Number of edges with the given label following the source nodes followed by the current label (noEdges*{label}):" << std::endl << "\t\t[";
+        for (auto iter = v.noEdgesFollowingSourceNodesByLabel.begin(); iter != v.noEdgesFollowingSourceNodesByLabel.end(); iter++) {
+            if (iter != v.noEdgesFollowingSourceNodesByLabel.begin()) std::cout << ", ";
+            std::cout << iter -> second << "*{" << iter -> first << "}";
+        }
+        std::cout << "]"  << std::endl << std::endl;
     }
 }
 
