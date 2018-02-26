@@ -26,8 +26,8 @@ void SimpleEstimator::prepare() {
     for(uint32_t i = 0; i < graph -> getNoVertices(); i++) {
 
         // The in and out degree corresponds to the lengths of the results given in the adjacency matrices.
-        vertexData[i].inDegree = static_cast<uint32_t>(graph -> adj[i].size());
-        vertexData[i].outDegree = static_cast<uint32_t>(graph -> reverse_adj[i].size());
+        vertexData[i].outDegree = static_cast<uint32_t>(graph -> adj[i].size());
+        vertexData[i].inDegree = static_cast<uint32_t>(graph -> reverse_adj[i].size());
 
         // Now use the entries in the adjacency matrix to calculate the label data.
         for(auto v : graph -> adj[i]) {
@@ -42,6 +42,10 @@ void SimpleEstimator::prepare() {
             ++vertexData[v.second].labelInDegrees[v.first];
         }
     }
+
+//    for(uint32_t i = 0; i < 13; i++) {
+//        std::cout << "id:" << i << " in:" << vertexData[i].inDegree << " out:" << vertexData[i].outDegree << std::endl;
+//    }
 }
 
 cardStat SimpleEstimator::estimate(RPQTree *q) {
