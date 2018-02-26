@@ -27,6 +27,14 @@ struct labelStat {
 
     // The total number of edges bearing this label.
     uint32_t noEdges;
+
+    // To make the estimates more exact, we track how often the specific label is successor or predecessor by another label.
+    std::map<uint32_t, uint32_t> noSuccessorEdgesPerLabel;
+    std::map<uint32_t, uint32_t> noPredecessorEdgesPerLabel;
+
+    // We track which if the source vertices/target vertices have access to edges bearing labels of the specified value.
+    std::map<uint32_t, std::unordered_set<uint32_t>> distinctSourcesPerSuccessorLabel;
+    std::map<uint32_t, std::unordered_set<uint32_t>> distinctTargetsPerPredecessorLabel;
 };
 
 
@@ -46,6 +54,8 @@ public:
     cardStat estimate(RPQTree *q) override ;
 
     std::vector<std::pair<int, bool>> parseTreeToList(RPQTree *q);
+
+    void printDebugData();
 };
 
 
