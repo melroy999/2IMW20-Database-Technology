@@ -10,42 +10,98 @@
 
 // A data structure holding information about vertices in the graph.
 struct vertexStat {
-    // Also keep the in and out degree of each individual label.
-    std::map<uint32_t, uint32_t> labelOutDegrees;
-    std::map<uint32_t, uint32_t> labelInDegrees;
+
+    // Keep the in and out degree of each vertex.
+    std::map<std::pair<uint32_t, bool>, uint32_t> labelDegrees;
 };
 
+
 // A data structure holding information about labels in the graph.
-struct labelStat {
-    // The set of distinct source and target vertices in the label collection.
+class labelStat {
+
+    // Whether this stat is a twin.
+    bool isTwin;
+
+    // The twin of the current label.
+    labelStat* twin;
+
+    // The distinct source and target nodes of the label.
     std::unordered_set<uint32_t> distinctSources;
     std::unordered_set<uint32_t> distinctTargets;
 
-    // The total number of edges bearing this label.
-    uint32_t noEdges;
+    // The number of edges using the label.
+    uint32_t edges;
 
-    /*
-     * The in and out degrees of the source/target nodes of the label, represented as a frequency map.
-     * In these mappings, the key is the in/out degree and the value is the amount of vertices having the in/out degree.
+public:
+
+    /**
+     * Add the given vertex to the list of distinct source vertices
+     *
+     * @param v The id of the source vertex
      */
-    std::map<uint32_t, uint32_t> sourceOutFrequencies;
-    std::map<uint32_t, uint32_t> targetInFrequencies;
+    void addSourceVertex(uint32_t v) {
+        distinctSources.insert(v);
+    }
 
-    /*
-     * Count how many of the target vertices are followed by an edge having the specified label.
-     * The key -1 denotes the number of vertices not followed by an edge.
+    /**
+     * Add the given vertex to the list of distinct target vertices
+     *
+     * @param v The id of the target vertex
      */
-    std::map<int, std::unordered_set<uint32_t>> distinctTargetNodesFollowedByLabel;
-    std::map<uint32_t, uint32_t> noEdgesFollowingTargetNodesByLabel;
+    void addTargetVertex(uint32_t v) {
+        distinctTargets.insert(v);
+    }
 
-    /*
-     * Count how many of the source vertices are followed by an edge having the specified label,
-     * after the application of the current label.
+    /**
+     * Increment the number of edges of the label by the given amount
+     *
+     * @param n The number of newly discovered edges
      */
-    std::map<int, std::unordered_set<uint32_t>> distinctSourceNodesFollowedByLabel;
-    std::map<uint32_t, uint32_t> noEdgesFollowingSourceNodesByLabel;
+    void addEdges(uint32_t n) {
+        edges += n;
+    }
 
+    /**
+     * Get the set of distinct source vertices of the label
+     *
+     * @return The source vertices if this label is a + label, otherwise, the target vertices of the + label
+     */
+    const std::unordered_set<uint32_t> &getDistinctSources() const {
+        return isTwin ? twin -> getDistinctTargets() : distinctSources;
+    }
+
+    /**
+     * Get the set of distinct source vertices of the label
+     *
+     * @return The target vertices if this label is a + label, otherwise, the source vertices of the + label
+     */
+    const std::unordered_set<uint32_t> &getDistinctTargets() const {
+        return isTwin ? twin -> getDistinctSources() : distinctTargets;
+    }
+
+    /**
+     * Get the number of edges that use the label
+     *
+     * @return The number of edges of the + label variant of this label
+     */
+    uint32_t getEdges() const {
+        return isTwin ? twin -> edges : edges;
+    }
+
+    /**
+     * Set the given + label statistic collection to be the twin of this label, converting this label to a twin label
+     *
+     * @param _twin The + label to make a twin pair with
+     */
+    void setTwin(labelStat* _twin) {
+        twin = _twin;
+        isTwin = true;
+
+        // Make sure that the twin is aware that this object is its twin now.
+        _twin->twin = this;
+    }
 };
+
 
 
 class SimpleEstimator : public Estimator {
@@ -54,7 +110,7 @@ class SimpleEstimator : public Estimator {
 
     // Variables containing graph data.
     std::vector<vertexStat> vertexData;
-    std::vector<labelStat> labelData;
+    std::map<std::pair<uint32_t, bool>, labelStat> labelData;
 
 public:
     explicit SimpleEstimator(std::shared_ptr<SimpleGraph> &g);
@@ -66,6 +122,7 @@ public:
     std::vector<std::pair<int, bool>> parseTreeToList(RPQTree *q);
 
     void printDebugData();
+
 };
 
 
