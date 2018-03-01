@@ -29,6 +29,7 @@ public:
 
     uint32_t getNoVertices() const override ;
     uint32_t getNoEdges() const override ;
+    uint32_t getNoDistinctEdges() const override ;
     uint32_t getNoLabels() const override ;
 
     void addEdge(uint32_t from, uint32_t to, uint32_t edgeLabel) override ;
