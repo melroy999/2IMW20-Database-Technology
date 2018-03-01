@@ -133,6 +133,24 @@ public:
     }
 
     /**
+     * Get the set of distinct source vertices of the label
+     *
+     * @return The source vertices if this label is a + label, otherwise, the target vertices of the + label
+     */
+    unsigned long getNumberOfDistinctSources() {
+        return isTwin ? twin -> getNumberOfDistinctTargets() : distinctSources.size();
+    }
+
+    /**
+     * Get the set of distinct source vertices of the label
+     *
+     * @return The target vertices if this label is a + label, otherwise, the source vertices of the + label
+     */
+    unsigned long getNumberOfDistinctTargets() {
+        return isTwin ? twin -> getNumberOfDistinctSources() : distinctTargets.size();
+    }
+
+    /**
      * Get the number of edges that use the label
      *
      * @return The number of edges of the + label variant of this label
@@ -170,19 +188,20 @@ public:
         return noEdgesFollowingTargetNodesByLabel[label];
     }
 
-    std::unordered_set<uint32_t>
-    getDistinctSourceNodesProceededByLabel(std::pair<uint32_t, bool> label) {
-        return twin -> distinctTargetNodesFollowedByLabel[{label.first, !label.second}];
+    unsigned long getNumberOfDistinctTargetNodesFollowedByLabel(std::pair<uint32_t, bool> label) {
+        return distinctTargetNodesFollowedByLabel[{label.first, label.second}].size();
     }
 
-    unsigned int getNoEdgesProceedingSourceNodesByLabel(std::pair<uint32_t, bool> label) {
-        return twin -> noEdgesFollowingTargetNodesByLabel[{label.first, !label.second}];
+    unsigned long getNumberOfDistinctSourceNodesProceededByLabel(std::pair<uint32_t, bool> label) {
+        return twin -> getNumberOfDistinctTargetNodesFollowedByLabel({label.first, !label.second});
     }
 
     const std::map<std::pair<uint32_t, bool>, std::unordered_set<uint32_t>> &
     getDistinctTargetNodesFollowedByLabel() const {
         return distinctTargetNodesFollowedByLabel;
     }
+
+
 
     const std::map<std::pair<uint32_t, bool>, uint32_t> &getNoEdgesFollowingTargetNodesByLabel() const {
         return noEdgesFollowingTargetNodesByLabel;
