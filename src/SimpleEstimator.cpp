@@ -154,7 +154,8 @@ cardStat SimpleEstimator::estimate(RPQTree *q) {
 
 
         // Simple version:
-        noPaths *= (float) labelData[l].getNoEdges() / labelData[l].getDistinctTargets().size();
+//        noPaths *= (float) labelData[l].getNoEdges() / labelData[l].getDistinctTargets().size();
+        noPaths *= (float) labelData[l_prev].getNoEdgesFollowingTargetNodesByLabel(l) / labelData[l_prev].getNumberOfDistinctTargetNodesFollowedByLabel(l);
 
 
 
