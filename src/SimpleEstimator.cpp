@@ -122,8 +122,79 @@ cardStat SimpleEstimator::estimate(RPQTree *q) {
 
     for(int i = 1; i < result.size(); i++) {
 
-        auto l = result[i];
-        noPaths *= ((float) labelData[l].getNoEdges()) / labelData[l].getDistinctTargets().size();
+        std::pair<uint32_t, bool> l = result[i];
+        std::pair<uint32_t, bool> l_prev = result[i - 1];
+
+        // Simple version:
+//        noPaths *= ((float) labelData[l].getNoEdges()) / labelData[l].getDistinctTargets().size();
+
+        // Using previous vertex data:
+        noPaths = ceilf(noPaths * ((float) labelData[l_prev].getNoEdgesFollowingTargetNodesByLabel(l)) / labelData[l].getDistinctTargets().size());
+
+
+        /*
+         * Suppose that S are our source nodes, and T are our target nodes for an arbitrary label (l, b)
+         *
+         * Given the out degrees of the nodes in S, and the in degrees of the nodes in T:
+         *      - Can we efficiently estimate the number of edges between S and T?
+         *          Let d_out_avg(S) be the average out degree of the source nodes:
+         *              sum_{v in S} out-degree(v) / |S| = #edges / |S|
+         *          Let d_in_avg(T) be the average in degree of the target nodes:
+         *              sum_{v in T} in-degree(v) / |T| = #edges / |T|
+         *
+         *        Suppose that we are now only interested in the edges originating from a subset of S: S_sub.
+         *        Obviously, we could estimate the number of edges as d_out_avg(S_sub) = |S_sub| * d_avg_out(S).
+         *        However, the out-degree between vertices might differ greatly, with very large outliers.
+         *        Suppose that all these outliers are in S_sub, then d_out_avg(S_sub) >> d_out_avg(S).
+         *        Suppose that none of these outliers are in S_sub, then d_out_avg(S_sub) << d_out_avg(S).
+         *
+         *        So can we estimate the number of edges for S_sub more accurately, keeping in mind that we have outliers?
+         */
+
+
+        /*
+         * The increase of path depends on the following factors.
+         * Let Q be the query, and (l, b) in Q is the current label we are observing.
+         *      - What are the number of source vertices of (l, b) that are not proceeded by label prev(Q, (l, b))?
+         *          These node are dangling, and should not be considered part of the path.
+         *
+         *          How do we remove these dangling paths from the total path count?
+         *          First option is to not include them as paths initially.
+         *          I.e., valid_edges = total_edges - sum_{v in dangling_vertices} degree(v, (l, b))
+         *
+         *          How do we estimate: sum_{v in dangling_vertices} degree(v, (l, b))?
+         *          First of all, we could estimate it as: average_degree * |dangling_vertices|
+         *          However, the average degree of the dangling_vertices might be different for a non random data set.
+         *          We could pre-calculate sum_{v in dangling_vertices} degree(v, (l, b)) in our data structure.         *
+         *
+         *      - What are the number of target vertices of next(Q, (l, b)) that are not succeeded by label (l, b)?
+         *          These nodes have a dead end, and should not be considered part of the path.
+         */
+
+
+
+        // This one does not work out, as the degree is applied to ALL paths, while some have no follow ups.
+//        noPaths *= ((float) labelData[l_prev].getNoEdgesFollowingTargetNodesByLabel(l)) / labelData[l_prev].getDistinctTargetNodesFollowedByLabel(l).size();
+
+
+
+        // Of the source nodes of the current label, how many do connect to the previous label?
+//        float f1 = (float) labelData[l].getDistinctSourceNodesProceededByLabel(l_prev).size() /
+//                labelData[l].getDistinctSources().size();
+
+        // Of the target nodes of the previous label, how many do connect to the current label?
+//        float f2 = (float) labelData[l_prev].getDistinctTargetNodesFollowedByLabel(l).size() /
+//                labelData[l_prev].getDistinctSources().size();
+
+        // How many of these two measurements overlap?
+
+
+//        noPaths *= f1 * ((float) labelData[l].getNoEdges()) / labelData[l].getDistinctTargets().size();
+
+
+//        noPaths *= f1 * ((float) labelData[l_prev].getNoEdgesFollowingTargetNodesByLabel(l)) / labelData[l].getDistinctTargetNodesFollowedByLabel(l).size();
+
+//        noPaths *= ((float) labelData[l_prev].getNoEdgesFollowingTargetNodesByLabel()[l].getNoEdges()) / labelData[l].getDistinctTargets().size();
     }
 
     // Return the estimate in the form {#outNodes, #paths, #inNodes}

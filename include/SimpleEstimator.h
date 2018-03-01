@@ -161,6 +161,24 @@ public:
         return isTwin ? twin -> getSourceOutFrequencies() : targetInFrequencies;
     }
 
+    std::unordered_set<uint32_t>
+    getDistinctTargetNodesFollowedByLabel(std::pair<uint32_t, bool> label) {
+        return distinctTargetNodesFollowedByLabel[label];
+    }
+
+    unsigned int getNoEdgesFollowingTargetNodesByLabel(std::pair<uint32_t, bool> label) {
+        return noEdgesFollowingTargetNodesByLabel[label];
+    }
+
+    std::unordered_set<uint32_t>
+    getDistinctSourceNodesProceededByLabel(std::pair<uint32_t, bool> label) {
+        return twin -> distinctTargetNodesFollowedByLabel[{label.first, !label.second}];
+    }
+
+    unsigned int getNoEdgesProceedingSourceNodesByLabel(std::pair<uint32_t, bool> label) {
+        return twin -> noEdgesFollowingTargetNodesByLabel[{label.first, !label.second}];
+    }
+
     const std::map<std::pair<uint32_t, bool>, std::unordered_set<uint32_t>> &
     getDistinctTargetNodesFollowedByLabel() const {
         return distinctTargetNodesFollowedByLabel;
@@ -169,7 +187,6 @@ public:
     const std::map<std::pair<uint32_t, bool>, uint32_t> &getNoEdgesFollowingTargetNodesByLabel() const {
         return noEdgesFollowingTargetNodesByLabel;
     }
-
 
 
     /**
