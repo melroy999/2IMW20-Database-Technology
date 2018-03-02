@@ -40,6 +40,11 @@ class labelStat {
     std::map<uint32_t, std::unordered_set<uint32_t>> targetInFrequencies;
 
     /*
+     * The sum of the squares of the frequencies, used to determine reverse label pairs, i.e. l+ followed by l-.
+     */
+    uint32_t sumOfTargetFrequencySquares;
+
+    /*
      * Count how many of the target vertices are followed by an edge having the specified label.
      */
     std::map<std::pair<uint32_t, bool>, std::unordered_set<uint32_t>> distinctTargetNodesFollowedByLabel;
@@ -205,6 +210,17 @@ public:
 
     const std::map<std::pair<uint32_t, bool>, uint32_t> &getNoEdgesFollowingTargetNodesByLabel() const {
         return noEdgesFollowingTargetNodesByLabel;
+    }
+
+    void calculateSumOfTargetFrequencySquares() {
+        sumOfTargetFrequencySquares = 0;
+        for(auto frequency : getTargetInFrequencies()) {
+            sumOfTargetFrequencySquares += frequency.first * frequency.first * frequency.second.size();
+        }
+    }
+
+    uint32_t getSumOfTargetFrequencySquares() const {
+        return sumOfTargetFrequencySquares;
     }
 
 

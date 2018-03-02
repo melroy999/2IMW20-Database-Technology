@@ -89,10 +89,11 @@ void SimpleEstimator::prepare() {
                     labelData[{i, b}].updateNoEdgesFollowingTargetNodesByLabel(w.first, w.second);
                 }
             }
+
+            // Calculate the target frequency square metric for all the labels.
+            labelData[{i, b}].calculateSumOfTargetFrequencySquares();
         }
     }
-
-    // TODO there currently is a bug where the number of nodes following a target node is double of what it should be.
 
 //    for(uint32_t i = 0; i < graph -> getNoLabels(); i++) {
 //        std::cout << labelData[{i, true}].getDistinctSources().size() << "," << labelData[{i, false}].getDistinctTargets().size() << std::endl;
@@ -101,20 +102,6 @@ void SimpleEstimator::prepare() {
 
     // Print the debug data.
     printDebugData();
-}
-
-template <typename InIt1, typename InIt2, typename OutIt>
-OutIt unordered_set_intersection(InIt1 b1, InIt1 e1, InIt2 b2, InIt2 e2, OutIt out) {
-    while (!(b1 == e1)) {
-        if (!(std::find(b2, e2, *b1) == e2)) {
-            *out = *b1;
-            ++out;
-        }
-
-        ++b1;
-    }
-
-    return out;
 }
 
 cardStat SimpleEstimator::estimate(RPQTree *q) {
@@ -138,39 +125,41 @@ cardStat SimpleEstimator::estimate(RPQTree *q) {
         auto l = result[i];
         auto l_prev = result[i - 1];
 
+        // If the labels are the same, and the direction is opposite, we should use the degree squaring approach.
+        if(l.first == l_prev.first && l.second != l_prev.second) {
+            uint32_t squareSum = labelData[l_prev].getSumOfTargetFrequencySquares();
+            noPaths *= ((float) squareSum / labelData[l].getNoEdges());
 
+        } else {
+            // First, get the number of target vertices of l_prev that are connected to the source vertices of l.
+            long terminatedTargetNodes = labelData[l_prev].getNumberOfDistinctTargets() -
+                                         labelData[l_prev].getNumberOfDistinctTargetNodesFollowedByLabel(l);
 
-        // First, get the number of target vertices of l_prev that are connected to the source vertices of l.
-        long terminatedTargetNodes = labelData[l_prev].getNumberOfDistinctTargets() - labelData[l_prev].getNumberOfDistinctTargetNodesFollowedByLabel(l);
-//        std::cout << labelData[l_prev].getNumberOfDistinctTargets() << ", " << labelData[l_prev].getNumberOfDistinctTargetNodesFollowedByLabel(l) << std::endl;
-//        std::cout << terminatedTargetNodes << std::endl;
+            // Calculate the number of edges we would have to remove.
+            float terminationFactor = (float) terminatedTargetNodes / labelData[l_prev].getNoEdges();
 
-        // Calculate the number of edges we would have to remove.
-        float termination_factor = (float) terminatedTargetNodes / labelData[l_prev].getNoEdges();
-
-        // Remove that factor of paths.
-        noPaths = static_cast<uint32_t>(ceilf(noPaths * (1 - termination_factor)));
-
-
-
-        // Simple version:
-//        noPaths *= (float) labelData[l].getNoEdges() / labelData[l].getDistinctTargets().size();
-        noPaths *= (float) labelData[l_prev].getNoEdgesFollowingTargetNodesByLabel(l) / labelData[l_prev].getNumberOfDistinctTargetNodesFollowedByLabel(l);
+            // Remove that factor of paths.
+            noPaths = static_cast<uint32_t>(ceilf(noPaths * (1 - terminationFactor)));
 
 
 
-        // We also have edges that just started, and are not connected to any of the previous.
-        long instantiatedSourceNodes = labelData[l].getNumberOfDistinctSources() - labelData[l].getNumberOfDistinctSourceNodesProceededByLabel(l_prev);
-//        std::cout << labelData[l_prev].getNumberOfDistinctSources() << ", " << labelData[l_prev].getNumberOfDistinctSourceNodesProceededByLabel(l) << std::endl;
-//        std::cout << instantiatedSourceNodes << std::endl;
-
-        // Calculate the number of edges we would have to remove.
-        float instantiation_factor = (float) instantiatedSourceNodes / labelData[l].getNoEdges();
-
-        // Remove that factor of paths.
-        noPaths = static_cast<uint32_t>(ceilf(noPaths * (1 - instantiation_factor)));
+            // Simple version:
+            noPaths *= (float) labelData[l_prev].getNoEdgesFollowingTargetNodesByLabel(l) /
+                       labelData[l_prev].getNumberOfDistinctTargetNodesFollowedByLabel(l);
 
 
+
+            // We also have edges that just started, and are not connected to any of the previous.
+            long instantiatedSourceNodes = labelData[l].getNumberOfDistinctSources() -
+                                           labelData[l].getNumberOfDistinctSourceNodesProceededByLabel(l_prev);
+
+            // Calculate the number of edges we would have to remove.
+            float instantiationFactor = (float) instantiatedSourceNodes / labelData[l].getNoEdges();
+
+            // Remove that factor of paths.
+            noPaths = static_cast<uint32_t>(ceilf(noPaths * (1 - instantiationFactor)));
+
+        }
 
 
 
