@@ -101,7 +101,7 @@ void SimpleEstimator::prepare() {
 //    }
 
     // Print the debug data.
-    printDebugData();
+//    printDebugData();
 }
 
 cardStat SimpleEstimator::estimate(RPQTree *q) {
@@ -114,11 +114,13 @@ cardStat SimpleEstimator::estimate(RPQTree *q) {
      * We start by estimating s and t by getting the number of distinct sources/targets
      * of the first and last label in the chain respectively.
      */
-    auto s = static_cast<uint32_t>(labelData[result.front()].getDistinctSources().size());
-    auto t = static_cast<uint32_t>(labelData[result.back()].getDistinctTargets().size());
+    auto s = static_cast<uint32_t>(labelData[result.front()].getNumberOfDistinctSources());
+    auto t = static_cast<uint32_t>(labelData[result.back()].getNumberOfDistinctTargets());
 
     // To estimate the number of paths, use the average degree of source vertices bearing the label.
     uint32_t noPaths = labelData[result.front()].getNoEdges();
+
+    float maxTerminationFactor = 0.0;
 
     for(int i = 1; i < result.size(); i++) {
 
@@ -129,7 +131,6 @@ cardStat SimpleEstimator::estimate(RPQTree *q) {
         if(l.first == l_prev.first && l.second != l_prev.second) {
             uint32_t squareSum = labelData[l_prev].getSumOfTargetFrequencySquares();
             noPaths *= ((float) squareSum / labelData[l].getNoEdges());
-
         } else {
             // First, get the number of target vertices of l_prev that are connected to the source vertices of l.
             long terminatedTargetNodes = labelData[l_prev].getNumberOfDistinctTargets() -
@@ -137,11 +138,10 @@ cardStat SimpleEstimator::estimate(RPQTree *q) {
 
             // Calculate the number of edges we would have to remove.
             float terminationFactor = (float) terminatedTargetNodes / labelData[l_prev].getNoEdges();
+            if(maxTerminationFactor < terminationFactor) maxTerminationFactor = terminationFactor;
 
             // Remove that factor of paths.
-            noPaths = static_cast<uint32_t>(ceilf(noPaths * (1 - terminationFactor)));
-
-
+            noPaths = static_cast<uint32_t>(ceilf(noPaths * (1 - maxTerminationFactor)));
 
             // Simple version:
             noPaths *= (float) labelData[l_prev].getNoEdgesFollowingTargetNodesByLabel(l) /
