@@ -5,6 +5,7 @@
 #include "SimpleGraph.h"
 #include "SimpleEstimator.h"
 #include <cmath>
+#include <set>
 
 
 SimpleEstimator::SimpleEstimator(std::shared_ptr<SimpleGraph> &g){
@@ -12,6 +13,12 @@ SimpleEstimator::SimpleEstimator(std::shared_ptr<SimpleGraph> &g){
     // works only with SimpleGraph
     graph = g;
 }
+
+struct pairHasher {
+    inline std::size_t operator()(const std::pair<int,int> & v) const {
+        return static_cast<size_t>(v.first * 31 + v.second);
+    }
+};
 
 void SimpleEstimator::prepare() {
 
@@ -31,9 +38,13 @@ void SimpleEstimator::prepare() {
      * and the non-distinct count of source and target vertices.
      */
     for(uint32_t i = 0; i < graph -> getNoVertices(); i++) {
+        std::unordered_set<std::pair<uint32_t, uint32_t>, pairHasher> encounteredEdges;
 
         // Now use the entries in the adjacency matrix to calculate the label data.
-        for(auto v : graph -> adj[i]) {
+        for(std::pair<uint32_t,uint32_t> v : graph -> adj[i]) {
+
+            // If the edge has been added already previously, do not add it again as we want distinct paths.
+            if(!encounteredEdges.insert(v).second) continue;
 
             // Update the appropriate out degree counter in the label degree mapping.
             ++vertexData[i].labelDegrees[{v.first, true}];
@@ -42,6 +53,9 @@ void SimpleEstimator::prepare() {
 
         // Do the same for the reverse adjacency matrix.
         for(auto v : graph -> reverse_adj[i]) {
+
+            // If the edge has been added already previously, do not add it again as we want distinct paths.
+            if(!encounteredEdges.insert(v).second) continue;
 
             // Update the appropriate in degree counter in the label degree mapping.
             ++vertexData[i].labelDegrees[{v.first, false}];
@@ -120,8 +134,6 @@ cardStat SimpleEstimator::estimate(RPQTree *q) {
     // To estimate the number of paths, use the average degree of source vertices bearing the label.
     uint32_t noPaths = labelData[result.front()].getNoEdges();
 
-    float maxTerminationFactor = 0.0;
-
     for(int i = 1; i < result.size(); i++) {
 
         auto l = result[i];
@@ -130,6 +142,14 @@ cardStat SimpleEstimator::estimate(RPQTree *q) {
         // If the labels are the same, and the direction is opposite, we should use the degree squaring approach.
         if(l.first == l_prev.first && l.second != l_prev.second) {
             uint32_t squareSum = labelData[l_prev].getSumOfTargetFrequencySquares();
+
+            float degree_out = (float) labelData[l].getNoEdges() / labelData[l].getNumberOfDistinctSources();
+            float degree_in = (float) labelData[l].getNoEdges() / labelData[l].getNumberOfDistinctTargets();
+
+//            std::cout << "square sum: " << squareSum << std::endl;
+//            std::cout << "degree out: " << degree_out << std::endl;
+//            std::cout << "degree in: " << degree_in << std::endl << std::endl;
+
             noPaths *= ((float) squareSum / labelData[l].getNoEdges());
         } else {
             // First, get the number of target vertices of l_prev that are connected to the source vertices of l.
@@ -138,10 +158,9 @@ cardStat SimpleEstimator::estimate(RPQTree *q) {
 
             // Calculate the number of edges we would have to remove.
             float terminationFactor = (float) terminatedTargetNodes / labelData[l_prev].getNoEdges();
-            if(maxTerminationFactor < terminationFactor) maxTerminationFactor = terminationFactor;
 
             // Remove that factor of paths.
-            noPaths = static_cast<uint32_t>(ceilf(noPaths * (1 - maxTerminationFactor)));
+            noPaths = static_cast<uint32_t>(ceilf(noPaths * (1 - terminationFactor)));
 
             // Simple version:
             noPaths *= (float) labelData[l_prev].getNoEdgesFollowingTargetNodesByLabel(l) /
