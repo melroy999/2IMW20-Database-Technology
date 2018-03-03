@@ -7,6 +7,13 @@
 
 #include "Estimator.h"
 #include "SimpleGraph.h"
+#include <cmath>
+
+struct pairHasher {
+    inline std::size_t operator()(const std::pair<int,int> & v) const {
+        return static_cast<size_t>(v.first * 31 + v.second);
+    }
+};
 
 // A data structure holding information about vertices in the graph.
 struct vertexStat {
@@ -30,7 +37,7 @@ class labelStat {
     std::unordered_set<uint32_t> distinctTargets;
 
     // The number of edges using the label.
-    uint32_t noEdges;
+    uint32_t numberOfEdges;
 
     /*
      * The in and out degrees of the source/target nodes of the label, represented as a frequency map.
@@ -40,17 +47,72 @@ class labelStat {
     std::map<uint32_t, std::unordered_set<uint32_t>> targetInFrequencies;
 
     /*
-     * The sum of the squares of the frequencies, used to determine reverse label pairs, i.e. l+ followed by l-.
+     * Next, we evaluate the outcomes of joins with all the other labels, to determine:
+     *      - the number of target nodes that can be matched to source nodes in the join
+     *      - the number of edges in the next label that are candidates to be in the path
+     *      - the distinct number of (s, t) pairs that are in the join
      */
-    uint32_t sumOfTargetFrequencySquares;
-
-    /*
-     * Count how many of the target vertices are followed by an edge having the specified label.
-     */
-    std::map<std::pair<uint32_t, bool>, std::unordered_set<uint32_t>> distinctTargetNodesFollowedByLabel;
-    std::map<std::pair<uint32_t, bool>, uint32_t> noEdgesFollowingTargetNodesByLabel;
+    std::map<std::pair<uint32_t, bool>, uint32_t> distinctTargetsInJoin;
+    std::map<std::pair<uint32_t, bool>, uint32_t> numberOfFollowUpEdgesInJoin;
+    double squareDegreeEstimation;
 
 public:
+    uint32_t sourceOutFrequencyMedian;
+    uint32_t targetInFrequencyMedian;
+
+    uint32_t sourceOutFrequencyMin;
+    uint32_t sourceOutFrequencyMax;
+
+    uint32_t targetInFrequencyMin;
+    uint32_t targetInFrequencyMax;
+
+    void analyzeFrequencyData() {
+        if(!getSourceOutFrequencies().empty() && !getTargetInFrequencies().empty()) {
+            sourceOutFrequencyMin = getSourceOutFrequencies().begin()->first;
+            targetInFrequencyMax = getTargetInFrequencies().begin()->first;
+
+            sourceOutFrequencyMin = getSourceOutFrequencies().begin()->first;
+            targetInFrequencyMin = getTargetInFrequencies().begin()->first;
+
+            sourceOutFrequencyMax = getSourceOutFrequencies().rbegin()->first;
+            targetInFrequencyMax = getTargetInFrequencies().rbegin()->first;
+
+            unsigned long nodes = getNumberOfDistinctSources();
+            for(const auto &f : getSourceOutFrequencies()) {
+                nodes -= f.second.size();
+                if(nodes <= 0.5 * getNumberOfDistinctSources()) {
+                    sourceOutFrequencyMedian = f.first;
+                    break;
+                }
+            }
+
+            nodes = getNumberOfDistinctTargets();
+            for(const auto &f : getTargetInFrequencies()) {
+                nodes -= f.second.size();
+                if(nodes <= 0.5 * getNumberOfDistinctTargets()) {
+                    targetInFrequencyMedian = f.first;
+                    break;
+                }
+            }
+        }
+    }
+
+    void calculateSquareDegreeEstimation() {
+        squareDegreeEstimation = 0;
+        for(const auto &f : getSourceOutFrequencies()) {
+            squareDegreeEstimation += f.second.size() * pow(f.first, 2);
+        }
+
+//        for(const auto &f : getTargetInFrequencies()) {
+//            squareDegreeEstimation -= f.second.size() * (f.first - 1);
+//        }
+    }
+
+    //region Getters and setters
+
+    double getSquareDegreeEstimation() const {
+        return squareDegreeEstimation;
+    }
 
     /**
      * Add the given vertex to the list of distinct source vertices
@@ -76,7 +138,7 @@ public:
      * @param n The number of newly discovered edges
      */
     void addEdges(uint32_t n) {
-        noEdges += n;
+        numberOfEdges += n;
     }
 
     /**
@@ -99,24 +161,13 @@ public:
         targetInFrequencies[d].insert(v);
     }
 
-    /**
-     * Add a target node to the set of distinct vertices that are followed by the given label
-     *
-     * @param label The label for which v has an outgoing edge.
-     * @param v The target vertex that is the source of the given label.
-     */
-    void updateDistinctTargetNodesFollowedByLabel(std::pair<uint32_t , bool> label, uint32_t v) {
-        distinctTargetNodesFollowedByLabel[label].insert(v);
+    void incrementDistinctTargetsInJoin(const std::pair<uint32_t, bool> label) {
+        distinctTargetsInJoin[label]++;
     }
 
-    /**
-     * Update the number of edges with the given label that originate from the target vertices.
-     *
-     * @param label The label which the edge belongs to.
-     * @param n The number of extra edges that have been found with the given label.
-     */
-    void updateNoEdgesFollowingTargetNodesByLabel(std::pair<uint32_t , bool> label, uint32_t n) {
-        noEdgesFollowingTargetNodesByLabel[label] += n;
+
+    void updateNumberOfFollowUpEdgesInJoin(const std::pair<uint32_t, bool> label, uint32_t add) {
+        numberOfFollowUpEdgesInJoin[label] += add;
     }
 
     /**
@@ -160,8 +211,8 @@ public:
      *
      * @return The number of edges of the + label variant of this label
      */
-    uint32_t getNoEdges() const {
-        return isTwin ? twin -> noEdges : noEdges;
+    uint32_t getNumberOfEdges() const {
+        return isTwin ? twin -> numberOfEdges : numberOfEdges;
     }
 
     /**
@@ -184,45 +235,25 @@ public:
         return isTwin ? twin -> getSourceOutFrequencies() : targetInFrequencies;
     }
 
-    std::unordered_set<uint32_t>
-    getDistinctTargetNodesFollowedByLabel(std::pair<uint32_t, bool> label) {
-        return distinctTargetNodesFollowedByLabel[label];
+    const std::map<std::pair<uint32_t, bool>, uint32_t> &getDistinctTargetsInJoin() const {
+        return distinctTargetsInJoin;
     }
 
-    unsigned int getNoEdgesFollowingTargetNodesByLabel(std::pair<uint32_t, bool> label) {
-        return noEdgesFollowingTargetNodesByLabel[label];
+    uint32_t getDistinctTargetsInJoin(const std::pair<uint32_t, bool> label) {
+        return distinctTargetsInJoin[label];
     }
 
-    unsigned long getNumberOfDistinctTargetNodesFollowedByLabel(std::pair<uint32_t, bool> label) {
-        return distinctTargetNodesFollowedByLabel[{label.first, label.second}].size();
+    uint32_t getDistinctSourcesInJoin(const std::pair<uint32_t, bool> label) {
+        return twin -> distinctTargetsInJoin[{label.first, !label.second}];
     }
 
-    unsigned long getNumberOfDistinctSourceNodesProceededByLabel(std::pair<uint32_t, bool> label) {
-        return twin -> getNumberOfDistinctTargetNodesFollowedByLabel({label.first, !label.second});
+    const std::map<std::pair<uint32_t, bool>, uint32_t> &getNumberOfFollowUpEdgesInJoin() const {
+        return numberOfFollowUpEdgesInJoin;
     }
 
-    const std::map<std::pair<uint32_t, bool>, std::unordered_set<uint32_t>> &
-    getDistinctTargetNodesFollowedByLabel() const {
-        return distinctTargetNodesFollowedByLabel;
+    uint32_t getNumberOfFollowUpEdgesInJoin(const std::pair<uint32_t, bool> label) {
+        return numberOfFollowUpEdgesInJoin[label];
     }
-
-
-
-    const std::map<std::pair<uint32_t, bool>, uint32_t> &getNoEdgesFollowingTargetNodesByLabel() const {
-        return noEdgesFollowingTargetNodesByLabel;
-    }
-
-    void calculateSumOfTargetFrequencySquares() {
-        sumOfTargetFrequencySquares = 0;
-        for(auto frequency : getTargetInFrequencies()) {
-            sumOfTargetFrequencySquares += frequency.first * frequency.first * frequency.second.size();
-        }
-    }
-
-    uint32_t getSumOfTargetFrequencySquares() const {
-        return sumOfTargetFrequencySquares;
-    }
-
 
     /**
      * Set the given + label statistic collection to be the twin of this label, converting this label to a twin label
@@ -235,6 +266,62 @@ public:
 
         // Make sure that the twin is aware that this object is its twin now.
         _twin->twin = this;
+    }
+    //endregion
+    
+    void printData() {
+        std::cout << "\t- is used by " << getNumberOfEdges() << " edges." << std::endl;
+        std::cout << "\t- has " << getDistinctSources().size() << " distinct sources." << std::endl;
+        std::cout << "\t- has " << getDistinctTargets().size() << " distinct targets." << std::endl;
+        std::cout << "\t- source out degree: [min]=" << sourceOutFrequencyMin
+                  << ", [average]=" << (double) getNumberOfEdges() / getNumberOfDistinctSources()
+                  << ", [median]=" << sourceOutFrequencyMedian
+                  << ", [max]=" << sourceOutFrequencyMax << "." << std::endl;
+        std::cout << "\t- tatget in degree: [min]=" << targetInFrequencyMin
+                  << ", [average]=" << (double) getNumberOfEdges() / getNumberOfDistinctTargets()
+                  << ", [median]=" << targetInFrequencyMedian
+                  << ", [max]=" << targetInFrequencyMax << "." << std::endl;
+
+
+        std::cout << "\t- Source-out frequencies (frequency*{id}):" << std::endl << "\t\t[";
+        int sum = 0;
+        for (auto iter = getSourceOutFrequencies().begin(); iter != getSourceOutFrequencies().end(); iter++) {
+            if (iter != getSourceOutFrequencies().begin()) std::cout << ", ";
+            std::cout << iter -> second.size() << "*{" << iter -> first << "}";
+            sum += iter -> first * iter -> second.size();
+        }
+        if(sum != getNumberOfEdges()) {
+            std::cout << "]"  << std::endl << "\t\tWARNING: sum != " << sum << std::endl;
+        } else {
+            std::cout << "]"  << std::endl;
+        }
+
+        sum = 0;
+        std::cout << "\t- Target-in frequencies (frequency*{id}):" << std::endl << "\t\t[";
+        for (auto iter = getTargetInFrequencies().begin(); iter != getTargetInFrequencies().end(); iter++) {
+            if (iter != getTargetInFrequencies().begin()) std::cout << ", ";
+            std::cout << iter -> second.size() << "*{" << iter -> first << "}";
+            sum += iter -> first * iter -> second.size();
+        }
+        if(sum != getNumberOfEdges()) {
+            std::cout << "]"  << std::endl << "\t\tWARNING: sum != " << sum << std::endl;
+        } else {
+            std::cout << "]"  << std::endl;
+        }
+
+        std::cout << "\t- Distinct target nodes in join with another label:" << std::endl << "\t\t[";
+        for (auto iter = getDistinctTargetsInJoin().begin(); iter != getDistinctTargetsInJoin().end(); iter++) {
+            if (iter != getDistinctTargetsInJoin().begin()) std::cout << ", ";
+            std::cout << iter -> second << "*{" << iter -> first.first << ", " << (iter -> first.second ? "true" : "false") << "}";
+        }
+        std::cout << "]"  << std::endl;
+
+        std::cout << "\t- Number of edges in join with another label:" << std::endl << "\t\t[";
+        for (auto iter = getNumberOfFollowUpEdgesInJoin().begin(); iter != getNumberOfFollowUpEdgesInJoin().end(); iter++) {
+            if (iter != getNumberOfFollowUpEdgesInJoin().begin()) std::cout << ", ";
+            std::cout << iter -> second << "*{" << iter -> first.first << ", " << (iter -> first.second ? "true" : "false") << "}";
+        }
+        std::cout << "]"  << std::endl;
     }
 };
 
