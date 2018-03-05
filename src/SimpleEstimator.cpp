@@ -119,6 +119,14 @@ void SimpleEstimator::prepare() {
 //    printDebugData();
 }
 
+double numberOfDuplicates(double m, double n, unsigned long s) {
+    // Now, what is the expected number of duplicates per source node? Use probability for this:
+    double pDuplicate = n - m + m * pow(1 - 1 / m, n);
+
+    // Now, the expected number of duplicates is the number of duplicates per node times the number of source nodes:
+    return pDuplicate * s;
+}
+
 exCardStat SimpleEstimator::doEstimation(RPQTree *q) {
     // Estimate only if we are a leaf or want to join.
     if(q -> isLeaf()) {
@@ -128,25 +136,19 @@ exCardStat SimpleEstimator::doEstimation(RPQTree *q) {
         std::pair<uint32_t, bool> label =
                 {static_cast<const uint32_t &>(std::stoi(data.substr(0, data.size() - 1))), data.back() == '+'};
 
-        exCardStat result = exCardStat {static_cast<double>(labelData[label].getNumberOfDistinctSources()),
-                                        static_cast<double>(labelData[label].getNumberOfEdges()),
-                                        static_cast<double>(labelData[label].getNumberOfDistinctTargets()),
-                                        label,
-                                        label
+        return exCardStat {static_cast<double>(labelData[label].getNumberOfDistinctSources()),
+                           static_cast<double>(labelData[label].getNumberOfEdges()),
+                           static_cast<double>(labelData[label].getNumberOfDistinctTargets()),
+                           label,
+                           label
         };
-
-//        q->print();
-//        std::cout << std::endl;
-//        result.print();
-
-        return result;
 
     } else if(q -> isConcat()) {
 
         exCardStat leftStat = doEstimation(q -> left);
         exCardStat rightStat = doEstimation(q -> right);
-        leftStat.print();
-        rightStat.print();
+//        leftStat.print();
+//        rightStat.print();
         
         auto leftData = &labelData[leftStat.rightLabel];
         auto rightData = &labelData[rightStat.leftLabel];
@@ -189,8 +191,21 @@ exCardStat SimpleEstimator::doEstimation(RPQTree *q) {
         double rightPathEstimation = rightStat.noPaths * (double) maxPaths / leftData->getDegreeSumInRightJoin(&rightStat.leftLabel);
 
 
+//        std::cout << leftPathEstimation << ", " << rightPathEstimation << std::endl;
 
-        double noPaths = (leftPathEstimation + rightPathEstimation) / 2;
+
+        // How many of the given paths is a duplicate?
+        // For now, we just take the probability that the source and the target are equal:
+//        double pDuplicate = 1.0 / (leftData->getNumberOfDistinctSources() - pSourceRemove * terminatedEdges + rightData->getNumberOfDistinctTargets() - pTargetRemove * initializedEdges);
+
+        double noPaths = ((leftPathEstimation + rightPathEstimation) / 2);
+
+        if(leftStat.rightLabel.first == rightStat.leftLabel.first && leftStat.rightLabel.second != rightStat.leftLabel.second) {
+            // We know that at least the number of edges minus the number of source nodes are duplicates.
+            unsigned long minimumDuplicateCount = leftData->getNumberOfEdges() - leftData->getNumberOfDistinctSources();
+            noPaths -= minimumDuplicateCount;
+        }
+//        double noPaths = sqrt(pow(leftPathEstimation, 2) + pow(rightPathEstimation, 2)) / 2;
 
 
 //        double noPaths = averageConnections * (leftStat.noPaths) * (rightStat.noPaths)
@@ -198,7 +213,7 @@ exCardStat SimpleEstimator::doEstimation(RPQTree *q) {
 
 
         exCardStat result = exCardStat {noOut,
-                                        noPaths,
+                                        std::min(noPaths, noOut * noIn),
                                         noIn,
                                         leftStat.leftLabel,
                                         rightStat.rightLabel
@@ -220,10 +235,10 @@ exCardStat SimpleEstimator::doEstimation(RPQTree *q) {
 cardStat SimpleEstimator::estimate(RPQTree *q) {
     std::cout << std::endl;
 
-    auto estimation = doEstimation(q);
-    estimation.print();
+//    auto estimation = doEstimation(q);
+//    estimation.print();
 
-    return static_cast<cardStat>(estimation);
+    return static_cast<cardStat>(doEstimation(q));
 }
 
 /**
