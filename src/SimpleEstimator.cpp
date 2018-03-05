@@ -119,12 +119,34 @@ void SimpleEstimator::prepare() {
 //    printDebugData();
 }
 
-double numberOfDuplicates(double m, double n, unsigned long s) {
-    // Now, what is the expected number of duplicates per source node? Use probability for this:
-    double pDuplicate = n - m + m * pow(1 - 1 / m, n);
 
-    // Now, the expected number of duplicates is the number of duplicates per node times the number of source nodes:
-    return pDuplicate * s;
+void estimateInAndOutCardinality(exCardStat* leftStat, exCardStat* rightStat, labelStat* leftData, labelStat* rightData, double* noOut, double* noIn) {
+    /*
+         * During the join, use the fact that the difference between the two sets of
+         * target/source vertices we merge on is not necessarily the empty set.
+         *
+         * We know for example that certain target vertices in the left subtree
+         * are not succeeded by the starting label of the right tree.
+         *
+         * On the other hand, we have that certain vertices in the right subtree
+         * are not proceeded by the end label of the left tree.
+         */
+    // What is the number of edges that have been terminated and initialized during the merge?
+    uint32_t terminatedEdges = leftData->getNumberOfEdges() - leftData->getDegreeSumInLeftJoin(&rightStat->leftLabel);
+    uint32_t initializedEdges = rightData->getNumberOfEdges() - leftData->getDegreeSumInRightJoin(&rightStat->leftLabel);
+
+    // What is the probability that a vertex ends up with no connected edges, when an edge gets removed?
+    // In other words, what is the chance that a vertex of degree one has its edge removed?
+    double pSourceRemove = (double) leftData->getSourceOutFrequencies(1) / leftData->getNumberOfEdges();
+    double pTargetRemove = (double) rightData->getTargetInFrequencies(1) / rightData->getNumberOfEdges();
+
+    // What about higher degree edges? In certain cases we have a very low amount of degree 1 edges,
+    // and should thus compensate.
+
+    // So, what is the expected number of source and target vertices given the above probabilities?
+    // Here we do not simply subtract, as we would risk getting negative numbers.
+    *noOut = leftStat->noOut * (1 - (pSourceRemove * terminatedEdges) / leftData->getNumberOfDistinctSources());
+    *noIn = rightStat->noIn * (1 - (pTargetRemove * initializedEdges) / rightData->getNumberOfDistinctTargets());
 }
 
 exCardStat SimpleEstimator::doEstimation(RPQTree *q) {
@@ -153,32 +175,8 @@ exCardStat SimpleEstimator::doEstimation(RPQTree *q) {
         auto leftData = &labelData[leftStat.rightLabel];
         auto rightData = &labelData[rightStat.leftLabel];
 
-        /*
-         * During the join, use the fact that the difference between the two sets of
-         * target/source vertices we merge on is not necessarily the empty set.
-         *
-         * We know for example that certain target vertices in the left subtree
-         * are not succeeded by the starting label of the right tree.
-         *
-         * On the other hand, we have that certain vertices in the right subtree
-         * are not proceeded by the end label of the left tree.
-         */
-        // What is the number of edges that have been terminated and initialized during the merge?
-        uint32_t terminatedEdges = leftData->getNumberOfEdges() - leftData->getDegreeSumInLeftJoin(&rightStat.leftLabel);
-        uint32_t initializedEdges = rightData->getNumberOfEdges() - leftData->getDegreeSumInRightJoin(&rightStat.leftLabel);
-
-        // What is the probability that a vertex ends up with no connected edges, when an edge gets removed?
-        // In other words, what is the chance that a vertex of degree one has its edge removed?
-        double pSourceRemove = (double) leftData->getSourceOutFrequencies(1) / leftData->getNumberOfEdges();
-        double pTargetRemove = (double) rightData->getTargetInFrequencies(1) / rightData->getNumberOfEdges();
-
-        // What about higher degree edges? In certain cases we have a very low amount of degree 1 edges,
-        // and should thus compensate.
-
-        // So, what is the expected number of source and target vertices given the above probabilities?
-        // Here we do not simply subtract, as we would risk getting negative numbers.
-        double noOut = leftStat.noOut * (1 - (pSourceRemove * terminatedEdges) / leftData->getNumberOfDistinctSources());
-        double noIn = rightStat.noIn * (1 - (pTargetRemove * initializedEdges) / rightData->getNumberOfDistinctTargets());
+        double noOut, noIn = 0;
+        estimateInAndOutCardinality(&leftStat, &rightStat, leftData, rightData, &noOut, &noIn);
 
         // First of all, we have exact data on the number of (non-distinct) paths in the join,
         // and the average expected number of paths in the join using the average in and out degree.
@@ -189,7 +187,18 @@ exCardStat SimpleEstimator::doEstimation(RPQTree *q) {
         // the degree sum for a specific label already covers for the terminated/initialized edges.
         double leftPathEstimation = leftStat.noPaths * (double) maxPaths / leftData->getDegreeSumInLeftJoin(&rightStat.leftLabel);
         double rightPathEstimation = rightStat.noPaths * (double) maxPaths / leftData->getDegreeSumInRightJoin(&rightStat.leftLabel);
+//        double leftPathEstimation = leftStat.noPaths * (double) maxPaths / leftData->getNumberOfEdges();
+//        double rightPathEstimation = rightStat.noPaths * (double) maxPaths / rightData->getNumberOfEdges();
 
+
+        // We can put a better bound on noOut and noIn by observing the join data.
+        if(leftStat.leftLabel == leftStat.rightLabel) {
+            noOut = std::min((double) leftData->getDegreeSumInLeftJoin(&rightStat.leftLabel), noOut);
+        }
+
+        if(rightStat.leftLabel == rightStat.rightLabel) {
+            noIn = std::min((double) leftData->getDegreeSumInRightJoin(&rightStat.leftLabel), noIn);
+        }
 
 //        std::cout << leftPathEstimation << ", " << rightPathEstimation << std::endl;
 
@@ -205,11 +214,6 @@ exCardStat SimpleEstimator::doEstimation(RPQTree *q) {
             unsigned long minimumDuplicateCount = leftData->getNumberOfEdges() - leftData->getNumberOfDistinctSources();
             noPaths -= minimumDuplicateCount;
         }
-//        double noPaths = sqrt(pow(leftPathEstimation, 2) + pow(rightPathEstimation, 2)) / 2;
-
-
-//        double noPaths = averageConnections * (leftStat.noPaths) * (rightStat.noPaths)
-//                         / std::max(leftStat.noIn, rightStat.noOut);
 
 
         exCardStat result = exCardStat {noOut,
@@ -233,7 +237,7 @@ exCardStat SimpleEstimator::doEstimation(RPQTree *q) {
 }
 
 cardStat SimpleEstimator::estimate(RPQTree *q) {
-    std::cout << std::endl;
+//    std::cout << std::endl;
 
 //    auto estimation = doEstimation(q);
 //    estimation.print();
