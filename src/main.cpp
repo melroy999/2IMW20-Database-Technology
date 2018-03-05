@@ -111,6 +111,13 @@ int main(int argc, char *argv[]) {
         actual.print();
         std::cout << "Time to evaluate: " << std::chrono::duration<double, std::milli>(end - start).count() << " ms" << std::endl;
 
+        std::cout << "Difference (noOut, noPaths, noIn) : ";
+        std::cout << "(" << (int) estimate.noOut - (int) actual.noOut << ", " << (int) estimate.noPaths - (int) actual.noPaths << ", " << (int) estimate.noIn - (int) actual.noIn << ")";
+        std::cout << ", q-error: ("
+                  <<  (double) std::max(estimate.noOut, actual.noOut) / std::min(estimate.noOut, actual.noOut)
+                  << ", " << (double) std::max(estimate.noPaths, actual.noPaths) / std::min(estimate.noPaths, actual.noPaths)
+                  << ", " << (double) std::max(estimate.noIn, actual.noIn) / std::min(estimate.noIn, actual.noIn) << ")" << std::endl;
+
         // clean-up
         delete(queryTree);
 

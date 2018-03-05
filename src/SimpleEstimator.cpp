@@ -116,7 +116,7 @@ void SimpleEstimator::prepare() {
     }
 
     // Print the debug data.
-    printDebugData();
+//    printDebugData();
 }
 
 exCardStat SimpleEstimator::doEstimation(RPQTree *q) {
@@ -145,6 +145,8 @@ exCardStat SimpleEstimator::doEstimation(RPQTree *q) {
 
         exCardStat leftStat = doEstimation(q -> left);
         exCardStat rightStat = doEstimation(q -> right);
+        leftStat.print();
+        rightStat.print();
         
         auto leftData = &labelData[leftStat.rightLabel];
         auto rightData = &labelData[rightStat.leftLabel];
@@ -159,46 +161,41 @@ exCardStat SimpleEstimator::doEstimation(RPQTree *q) {
          * On the other hand, we have that certain vertices in the right subtree
          * are not proceeded by the end label of the left tree.
          */
-        uint32_t commonVertices = leftData->getNumberOfCommonNodesInJoin(&rightStat.leftLabel);
-
         // What is the number of edges that have been terminated and initialized during the merge?
-        double terminatedEdges = leftData->getNumberOfEdges() - leftData->getDegreeSumInLeftJoin(&rightStat.leftLabel);
-        double initializedEdges = rightData->getNumberOfEdges() - leftData->getDegreeSumInRightJoin(&rightStat.leftLabel);
+        uint32_t terminatedEdges = leftData->getNumberOfEdges() - leftData->getDegreeSumInLeftJoin(&rightStat.leftLabel);
+        uint32_t initializedEdges = rightData->getNumberOfEdges() - leftData->getDegreeSumInRightJoin(&rightStat.leftLabel);
 
         // What is the probability that a vertex ends up with no connected edges, when an edge gets removed?
         // In other words, what is the chance that a vertex of degree one has its edge removed?
         double pSourceRemove = (double) leftData->getSourceOutFrequencies(1) / leftData->getNumberOfEdges();
         double pTargetRemove = (double) rightData->getTargetInFrequencies(1) / rightData->getNumberOfEdges();
 
-        // So, what is the expected number of removed vertices?
+        // What about higher degree edges? In certain cases we have a very low amount of degree 1 edges,
+        // and should thus compensate.
+
+        // So, what is the expected number of source and target vertices given the above probabilities?
         // Here we do not simply subtract, as we would risk getting negative numbers.
         double noOut = leftStat.noOut * (1 - (pSourceRemove * terminatedEdges) / leftData->getNumberOfDistinctSources());
         double noIn = rightStat.noIn * (1 - (pTargetRemove * initializedEdges) / rightData->getNumberOfDistinctTargets());
 
-        // What is the effect of the above on the total number of distinct paths?
-        // First of all, we have exact data on the number of (non-distinct) paths in the join.
+        // First of all, we have exact data on the number of (non-distinct) paths in the join,
+        // and the average expected number of paths in the join using the average in and out degree.
         uint32_t maxPaths = leftData->getNumberOfPathsInJoin(&rightStat.leftLabel);
 
-
-        double noPaths = rightStat.noPaths * leftStat.noPaths
-                         / std::max(leftStat.noIn, rightStat.noOut);
-
-
-//        if(true || leftStat.rightLabel.first == rightStat.leftLabel.first && leftStat.rightLabel.second != rightStat.leftLabel.second) {
-//            noPaths = rightStat.noPaths * leftStat.noPaths * maxPaths / (leftData->getNumberOfEdges() * rightData->getNumberOfEdges());
-//        }
-
-
-//        double noPaths = (leftStat.noPaths * (1 - terminatedEdges / leftData->getNumberOfEdges())) * (rightStat.noPaths * (1 - initializedEdges / rightData->getNumberOfEdges()) / std::max(noIn, noOut));
+        // Using the above, we can determine the expected number of follow up edges.
+        // Note here that we use the raw path stats, since the max paths measure combined with
+        // the degree sum for a specific label already covers for the terminated/initialized edges.
+        double leftPathEstimation = leftStat.noPaths * (double) maxPaths / leftData->getDegreeSumInLeftJoin(&rightStat.leftLabel);
+        double rightPathEstimation = rightStat.noPaths * (double) maxPaths / leftData->getDegreeSumInRightJoin(&rightStat.leftLabel);
 
 
 
-        std::cout << maxPaths << ", " << maxPaths / noPaths << ", " << (double) maxPaths / noPaths << std::endl;
+        double noPaths = (leftPathEstimation + rightPathEstimation) / 2;
 
-        /*
-         * We know that when we join leftStat.rightLabel and rightStat.leftLabel, that we have at most
-         * leftStat.rightLabel.numberOfPathsInJoin[rightStat.leftLabel] not necessarily distinct paths.
-         */
+
+//        double noPaths = averageConnections * (leftStat.noPaths) * (rightStat.noPaths)
+//                         / std::max(leftStat.noIn, rightStat.noOut);
+
 
         exCardStat result = exCardStat {noOut,
                                         noPaths,
@@ -223,7 +220,10 @@ exCardStat SimpleEstimator::doEstimation(RPQTree *q) {
 cardStat SimpleEstimator::estimate(RPQTree *q) {
     std::cout << std::endl;
 
-    return static_cast<cardStat>(doEstimation(q));
+    auto estimation = doEstimation(q);
+    estimation.print();
+
+    return static_cast<cardStat>(estimation);
 }
 
 /**
