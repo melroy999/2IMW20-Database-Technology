@@ -12,6 +12,13 @@ SimpleEstimator::SimpleEstimator(std::shared_ptr<SimpleGraph> &g){
     graph = g;
 }
 
+// sort on the second item in the pair, then on the first (ascending order)
+bool sortPairs2(const std::pair<uint32_t,uint32_t> &a, const std::pair<uint32_t,uint32_t> &b) {
+    if (a.second < b.second) return true;
+    if (a.second == b.second) return a.first < b.first;
+    return false;
+}
+
 void SimpleEstimator::prepare() {
 
     // Initialise vectors with lengths corresponding to num vertices or labels.
@@ -31,6 +38,8 @@ void SimpleEstimator::prepare() {
      */
     for(uint32_t i = 0; i < graph -> getNoVertices(); i++) {
 
+        std::sort(graph -> adj[i].begin(), graph -> adj[i].end(), sortPairs2);
+
         uint32_t prevTarget = 0;
         uint32_t prevLabel = 0;
         bool first = true;
@@ -48,6 +57,8 @@ void SimpleEstimator::prepare() {
                 prevLabel = labelTgtPair.first;
             }
         }
+
+        std::sort(graph -> reverse_adj[i].begin(), graph -> reverse_adj[i].end(), sortPairs2);
 
         prevTarget = 0;
         prevLabel = 0;
@@ -116,7 +127,7 @@ void SimpleEstimator::prepare() {
     }
 
     // Print the debug data.
-//    printDebugData();
+    printDebugData();
 }
 
 
