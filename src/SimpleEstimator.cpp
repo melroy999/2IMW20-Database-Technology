@@ -127,7 +127,7 @@ void SimpleEstimator::prepare() {
     }
 
     // Print the debug data.
-    printDebugData();
+//    printDebugData();
 }
 
 
