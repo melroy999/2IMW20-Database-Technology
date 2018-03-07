@@ -53,8 +53,6 @@ class labelStat {
      */
     std::map<uint32_t, uint32_t> sourceOutFrequencies;
     std::map<uint32_t, uint32_t> targetInFrequencies;
-    std::map<uint32_t, uint32_t> sourceOutFrequenciesSummation;
-    std::map<uint32_t, uint32_t> targetInFrequenciesSummation;
 
     // The number of edges using the label.
     uint32_t numberOfEdges;
@@ -73,17 +71,7 @@ class labelStat {
 
 public:
     void analyze() {
-        uint32_t sum = 0;
-        for(const auto &labelEntry : sourceOutFrequencies) {
-            sourceOutFrequenciesSummation[labelEntry.first] = sum;
-            sum += labelEntry.second;
-        }
 
-        sum = 0;
-        for(const auto &labelEntry : targetInFrequencies) {
-            targetInFrequenciesSummation[labelEntry.first] = sum;
-            sum += labelEntry.second;
-        }
     }
 
 
@@ -203,38 +191,6 @@ public:
         return isTwin ? twin -> getSourceOutFrequencies(i) : targetInFrequencies[i];
     }
 
-    const std::map<uint32_t, uint32_t> &getSourceOutFrequenciesSummation() const {
-        return isTwin ? twin -> getTargetInFrequenciesSummation() : sourceOutFrequenciesSummation;
-    }
-
-    const std::map<uint32_t, uint32_t> &getTargetInFrequenciesSummation() const {
-        return isTwin ? twin -> getSourceOutFrequenciesSummation() : targetInFrequenciesSummation;
-    }
-
-    uint32_t getSourceOutFrequenciesSummation(uint32_t i) {
-        return isTwin ? twin -> getTargetInFrequenciesSummation(i) : sourceOutFrequenciesSummation[i];
-    }
-
-    uint32_t getTargetInFrequenciesSummation(uint32_t i) {
-        return isTwin ? twin -> getSourceOutFrequenciesSummation(i) : targetInFrequenciesSummation[i];
-    }
-
-    double estimateNumberOfRemovedSourceNodes(double degreeReduction) {
-        auto floor = static_cast<uint32_t>(std::ceil(degreeReduction));
-
-        return getSourceOutFrequenciesSummation(floor) + (degreeReduction - floor + 1) * getSourceOutFrequencies(floor);
-    }
-
-    double estimateNumberOfRemovedTargetNodes(double degreeReduction) {
-        auto floor = static_cast<uint32_t>(std::ceil(degreeReduction));
-
-
-        auto w = (degreeReduction - floor + 1) * getTargetInFrequencies(floor);
-        auto v = getTargetInFrequenciesSummation(floor) + (degreeReduction - floor + 1) * getTargetInFrequencies(floor);
-
-        return getTargetInFrequenciesSummation(floor) + (degreeReduction - floor + 1) * getTargetInFrequencies(floor);
-    }
-
     /**
      * Get the number of edges that use the label
      *
@@ -291,6 +247,7 @@ public:
     double getAverageInDegree() {
         return (double) getNumberOfEdges() / getNumberOfDistinctTargets();
     }
+
     //endregion
 
     /**
@@ -306,7 +263,9 @@ public:
         _twin->twin = this;
     }
     
-    void printData() {
+    void printData(uint32_t i, bool b) {
+        std::cout << std::endl;
+        std::cout << "Label {" << i << ", " << (b ? "true" : "false") << "}:" << std::endl;
         std::cout << "\t- is used by " << getNumberOfEdges() << " edges" << std::endl;
         std::cout << "\t- has " << getNumberOfDistinctSources() << " distinct sources" << std::endl;
         std::cout << "\t- has " << getNumberOfDistinctTargets() << " distinct targets" << std::endl;
@@ -367,19 +326,7 @@ public:
             std::cout << "]"  << std::endl;
         }
 
-        std::cout << "\t- Source-out frequencies sum (sum*{id}):" << std::endl << "\t\t[";
-        for (auto iter = getSourceOutFrequenciesSummation().begin(); iter != getSourceOutFrequenciesSummation().end(); iter++) {
-            if (iter != getSourceOutFrequenciesSummation().begin()) std::cout << ", ";
-            std::cout << iter -> second << "*{" << iter -> first << "}";
-        }
-        std::cout << "]"  << std::endl;
-
-        std::cout << "\t- Target-in frequencies sum (sum*{id}):" << std::endl << "\t\t[";
-        for (auto iter = getTargetInFrequenciesSummation().begin(); iter != getTargetInFrequenciesSummation().end(); iter++) {
-            if (iter != getTargetInFrequenciesSummation().begin()) std::cout << ", ";
-            std::cout << iter -> second << "*{" << iter -> first << "}";
-        }
-        std::cout << "]"  << std::endl;
+        std::cout << std::endl;
     }
 };
 
@@ -399,8 +346,6 @@ public:
 
     void prepare() override ;
     cardStat estimate(RPQTree *q) override ;
-
-    std::vector<std::pair<uint32_t, bool>> parseTreeToList(RPQTree *q);
 
     void printDebugData();
 
