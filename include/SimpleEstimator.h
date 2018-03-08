@@ -6,52 +6,33 @@
 #define QS_SIMPLEESTIMATOR_H
 
 #include <set>
+#include <cmath>
+#include <iomanip>
 #include "Estimator.h"
 #include "SimpleGraph.h"
 
-struct labelStat {
+struct exCardStat {
+    double noOut;
+    double noPaths;
+    double noIn;
 
-    // Whether this stat is a twin.
-    bool isInverse;
+    // The vertices that have been processed in this statistics collection.
+    std::vector<uint32_t> vertices;
 
-    // The twin of the current label.
-    labelStat* twin;
-
-    // The id of the label.
-    uint32_t id;
-
-    // The number of unique edges that use this label.
-    uint32_t numEdges;
-
-    // The sources and targets of the label, encoded as a bit collection.
-    std::vector<uint64_t> sources;
-    std::vector<uint64_t> targets;
-    uint32_t numSources;
-    uint32_t numTargets;
-
-    // The transitions, encoded as bit collections.
-    // Here, we limit the pair value to char, as it is a value of at most 64.
-    labelStat(uint32_t id, bool isInverse, unsigned long noBins) {
-
-        labelStat::id = id;
-        labelStat::isInverse = isInverse;
-        sources = std::vector<uint64_t>(noBins);
-        targets = std::vector<uint64_t>(noBins);
+    void print() {
+        std::cout << "(" << noOut << ", " << noPaths << ", " << noIn << ")" << std::endl;
     }
 
-    void setTwin(labelStat* twin) {
-        labelStat::twin = twin;
-        twin->twin = this;
-    }
+    explicit operator cardStat() {
+        cardStat result = cardStat {static_cast<uint32_t>(ceil(noOut)), static_cast<uint32_t>(noPaths), static_cast<uint32_t>(ceil(noIn))};
+        result.noPaths = std::min(result.noPaths, result.noOut * result.noIn);
 
-    const std::vector<uint64_t> &getSources() const { return isInverse ? twin -> getTargets() : sources; }
-    const std::vector<uint64_t> &getTargets() const { return isInverse ? twin -> getSources() : targets; }
-    uint32_t getNumSources() const { return isInverse ? twin -> getNumTargets() : numSources; }
-    uint32_t getNumTargets() const { return isInverse ? twin -> getNumSources() : numTargets; }
-    uint32_t getNumEdges() const { return isInverse ? twin -> getNumEdges() : numEdges; }
+        return result;
+    }
 };
 
 struct joinStat;
+struct labelStat;
 
 class SimpleEstimator : public Estimator {
 
@@ -66,10 +47,78 @@ public:
 
     void prepare() override ;
     cardStat estimate(RPQTree *q) override ;
+    exCardStat doEstimation(RPQTree *q);
 
     static std::vector<uint64_t> doAnd(const std::vector<uint64_t> *t, const std::vector<uint64_t> *s);
 
     static uint32_t countBitsSet(std::vector<uint64_t> *result);
+
+    static bool sortEdges(const std::pair<uint32_t, uint32_t> &a, const std::pair<uint32_t, uint32_t> &b);
+};
+
+struct labelStat {
+
+    // Whether this stat is a twin.
+    bool isInverse;
+
+    // The twin of the current label.
+    labelStat* twin{};
+
+    // The id of the label.
+    uint32_t uid;
+    uint32_t id;
+
+private:
+
+    // The number of unique edges that use this label.
+    uint32_t numEdges{};
+
+    // The sources and targets of the label, encoded as a bit collection.
+    std::vector<uint64_t> sources;
+    std::vector<uint64_t> targets;
+    uint32_t numSources{};
+    uint32_t numTargets{};
+
+public:
+
+    // The transitions, encoded as bit collections.
+    // Here, we limit the pair value to char, as it is a value of at most 64.
+    labelStat(uint32_t uid, uint32_t id, bool isInverse, unsigned long noBins) {
+
+        labelStat::uid = uid;
+        labelStat::id = id;
+        labelStat::isInverse = isInverse;
+        sources = std::vector<uint64_t>(noBins);
+        targets = std::vector<uint64_t>(noBins);
+    }
+
+    void setTwin(labelStat* twin) {
+        labelStat::twin = twin;
+        twin->twin = this;
+    }
+
+    const std::vector<uint64_t> &getSources() const { return isInverse ? twin -> getTargets() : sources; }
+    const std::vector<uint64_t> &getTargets() const { return isInverse ? twin -> getSources() : targets; }
+    const uint32_t getNumSources() const { return isInverse ? twin -> getNumTargets() : numSources; }
+    const uint32_t getNumTargets() const { return isInverse ? twin -> getNumSources() : numTargets; }
+    const uint32_t getNumEdges() const { return isInverse ? twin -> getNumEdges() : numEdges; }
+
+    void calculateSize() {
+        numSources = SimpleEstimator::countBitsSet(&sources);
+        numTargets = SimpleEstimator::countBitsSet(&targets);
+    }
+
+    void insertEdge(uint32_t s, uint32_t t) {
+        sources[s / 64] |= 1ULL << (s % 64);
+        targets[t / 64] |= 1ULL << (t % 64);
+        numEdges++;
+    }
+
+    const void print() const {
+        std::cout << "Label id=" << id << (isInverse ? "-" : "+") << ", uid=" << uid << ": #sources=" << std::left << std::setw(8)
+                  << getNumSources() << "#targets=" << std::setw(8) << getNumTargets() << "#edges="
+                  << std::setw(8) << getNumEdges() << std::endl;
+    }
 };
 
 struct joinStat {
@@ -87,6 +136,9 @@ struct joinStat {
 
     // The number of (non-distinct) paths between the source and the target label.
     uint32_t numPaths;
+    uint32_t numSourceEdges;
+    uint32_t numTargetEdges;
+    uint32_t uniquePaths;
 
     void changeBucketSize(unsigned long noBins) {
         sourceNodes.resize(noBins);
@@ -94,13 +146,21 @@ struct joinStat {
     }
 
     void join(const labelStat* source, const labelStat* target) {
-        joinStat::source = source->id;
-        joinStat::target = target->id;
+        joinStat::source = source->uid;
+        joinStat::target = target->uid;
 
         auto targets = &source->getTargets();
         auto sources = &target->getSources();
         commonNodes = SimpleEstimator::doAnd(&source->getTargets(), &target->getSources());
         numCommonNodes = SimpleEstimator::countBitsSet(&commonNodes);
+    }
+
+    const void print() const {
+        std::cout << "Join " << source << "x" << target << ": #numCommonNodes=" << std::left << std::setw(8)
+                  << numCommonNodes << "#numSourceNodes=" << std::setw(10) << numSourceNodes << "#numTargetNodes="
+                  << std::setw(8) << numTargetNodes << "#numPaths="  << std::setw(8) << numPaths << "#numSourceEdges="
+                  << std::setw(8) << numSourceEdges << "#numTargetEdges="  << std::setw(8) << numTargetEdges << "#uniquePaths="  << std::setw(8) << uniquePaths << std::endl;
+
     }
 };
 

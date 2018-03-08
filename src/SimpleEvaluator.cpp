@@ -123,8 +123,6 @@ std::shared_ptr<SimpleGraph> SimpleEvaluator::evaluate_aux(RPQTree *q) {
         // evaluate the children
         auto leftGraph = SimpleEvaluator::evaluate_aux(q->left);
         auto rightGraph = SimpleEvaluator::evaluate_aux(q->right);
-        SimpleEvaluator::computeStats(leftGraph).print();
-        SimpleEvaluator::computeStats(rightGraph).print();
 
         // join left with right
         return SimpleEvaluator::join(leftGraph, rightGraph);
