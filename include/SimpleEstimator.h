@@ -153,6 +153,11 @@ struct joinStat {
         auto sources = &target->getSources();
         commonNodes = SimpleEstimator::doAnd(&source->getTargets(), &target->getSources());
         numCommonNodes = SimpleEstimator::countBitsSet(&commonNodes);
+
+        // If the set of common nodes is empty, free the space of the vector.
+        if(numCommonNodes == 0) {
+            commonNodes.resize(0);
+        }
     }
 
     const void print() const {

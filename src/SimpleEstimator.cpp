@@ -29,7 +29,13 @@ uint32_t SimpleEstimator::countBitsSet(std::vector<uint64_t>* result) {
 }
 
 std::vector<uint64_t> SimpleEstimator::doAnd(const std::vector<uint64_t> *t, const std::vector<uint64_t> *s) {
+
+    // If the sizes do not correspond, return an empty join.
     std::vector<uint64_t> result(t->size());
+    if(t->size() != s->size()) {
+        return result;
+    }
+
     for(unsigned long i = t->size() ; i -- > 0 ; ) {
         result[i] = (*t)[i] & (*s)[i];
     }
@@ -227,7 +233,7 @@ void SimpleEstimator::prepare() {
 
 
 cardStat SimpleEstimator::estimate(RPQTree *q) {
-    std::cout << std::endl;
+//    std::cout << std::endl;
 
     // perform your estimation here
 
@@ -285,18 +291,29 @@ exCardStat SimpleEstimator::doEstimation(RPQTree *q) {
             // Recall the join made between the two left neighboring labels:
             auto previousJoin = &joinData[leftStat.vertices.end()[-2]][leftStat.vertices.end()[-1]];
 
-            // Find out which of the source nodes in the join are part of the previous join.
+            // Find out which of the source nodes in the join are part of the common nodes of the previous join.
             auto usableSources = doAnd(&join->sourceNodes, &previousJoin->commonNodes);
             auto numberOfUsableSources = countBitsSet(&usableSources);
 
-            // Compared to the interface, how many vertices are in the terminated nodes?
-            unsigned long terminatedNodes = previousJoin->numCommonNodes - numberOfUsableSources;
+            // Compared to the interface, how many vertices used in the previous merge can now be used as sources?
+            double terminatedInCommon = (double) (previousJoin->numCommonNodes - numberOfUsableSources) / numberOfUsableSources;
+//            double terminatedInSource = (double) (join->numSourceNodes - numberOfUsableSources) / join->numSourceNodes;
+//
+//            // What is the difference between the number of edges in the joins?
+//            auto edgeDiff = abs(join->numSourceEdges - previousJoin->numTargetEdges);
+////
+////            // What is the effect of leaving out the invalid source nodes of the current merge?
+//            double sourceReduction = numberOfUsableSources * ((double) join->numSourceEdges / join->numSourceNodes);
+
+
+//            auto averageDegree = (double) previousJoin->numSourceEdges / previousJoin->numCommonNodes;
+//            auto n = std::min(((averageDegree * numberOfUsableSources) / join->numSourceNodes), (double) 1);
 
             // Which number of source nodes can actually be used?
             auto averageDegree = (double) previousJoin->numSourceEdges / previousJoin->numCommonNodes;
             auto n = std::min(((averageDegree * numberOfUsableSources) / join->numSourceNodes), (double) 1);
 
-            noOut = leftStat.noOut - terminatedNodes;
+            noOut = leftStat.noOut * (1 - terminatedInCommon / previousJoin->numCommonNodes);
             noOut *= n;
         } else {
             // We can determine the maximum number of source nodes exactly, since we have no predecessors.
@@ -304,10 +321,28 @@ exCardStat SimpleEstimator::doEstimation(RPQTree *q) {
         }
 
         if(rightStat.vertices.size() > 1) {
-            double pTargetTermination = (double) (rightData->getNumTargets() - join->numTargetNodes) / rightData->getNumTargets();
+            // Recall the join made between the two right neighboring labels:
+            auto nextJoin = &joinData[rightStat.vertices.begin()[0]][rightStat.vertices.begin()[1]];
 
-            // Estimate the number of noIn.
-            noIn = rightStat.noIn * (1 - pTargetTermination);
+            // Find out which of the source nodes in the join are part of the common nodes of the previous join.
+            auto usableSources = doAnd(&join->targetNodes, &nextJoin->commonNodes);
+            auto numberOfUsableSources = countBitsSet(&usableSources);
+
+            // Compared to the interface, how many vertices used in the previous merge can now be used as sources?
+            double terminatedInCommon = (double) (nextJoin->numCommonNodes - numberOfUsableSources) / numberOfUsableSources;
+
+            // Which number of source nodes can actually be used?
+            auto averageDegree = (double) nextJoin->numTargetEdges / nextJoin->numCommonNodes;
+            auto n = std::min(((averageDegree * numberOfUsableSources) / join->numSourceNodes), (double) 1);
+
+            noIn = rightStat.noIn * (1 - terminatedInCommon / nextJoin->numCommonNodes);
+            noIn *= n;
+
+//
+//            double pTargetTermination = (double) (rightData->getNumTargets() - join->numTargetNodes) / rightData->getNumTargets();
+//
+//            // Estimate the number of noIn.
+//            noIn = rightStat.noIn * (1 - pTargetTermination);
         } else {
             // We can determine the number of target vertices exactly.
             noIn = join->numTargetNodes;
