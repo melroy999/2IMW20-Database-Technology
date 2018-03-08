@@ -9,11 +9,19 @@ SimpleEvaluator::SimpleEvaluator(std::shared_ptr<SimpleGraph> &g) {
 
     // works only with SimpleGraph
     graph = g;
+    est = nullptr; // estimator not attached by default
+}
+
+void SimpleEvaluator::attachEstimator(std::shared_ptr<SimpleEstimator> &e) {
+    est = e;
 }
 
 void SimpleEvaluator::prepare() {
 
-    // nothing to prepare..
+    // if attached, prepare the estimator
+    if(est != nullptr) est->prepare();
+
+    // prepare other things here.., if necessary
 
 }
 
