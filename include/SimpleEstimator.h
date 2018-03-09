@@ -24,10 +24,7 @@ struct exCardStat {
     }
 
     explicit operator cardStat() {
-        cardStat result = cardStat {static_cast<uint32_t>(ceil(noOut)), static_cast<uint32_t>(noPaths), static_cast<uint32_t>(ceil(noIn))};
-        result.noPaths = std::min(result.noPaths, result.noOut * result.noIn);
-
-        return result;
+        return cardStat {static_cast<uint32_t>(noOut), static_cast<uint32_t>(noPaths), static_cast<uint32_t>(noIn)};
     }
 };
 
@@ -79,6 +76,10 @@ private:
     uint32_t numSources{};
     uint32_t numTargets{};
 
+    // The number of sources of the labelStat with source out degree 1 and target out degree 1.
+    uint32_t sourceOut1{};
+    uint32_t targetIn1{};
+
 public:
 
     // The transitions, encoded as bit collections.
@@ -114,10 +115,27 @@ public:
         numEdges++;
     }
 
+    void incrementSourceOut1() {
+        sourceOut1++;
+    }
+
+    void incrementTargetIn1() {
+        targetIn1++;
+    }
+
+    uint32_t getSourceOut1() const {
+        return isInverse ? twin -> targetIn1 : sourceOut1;
+    }
+
+    uint32_t getTargetIn1() const {
+        return isInverse ? twin -> sourceOut1 : targetIn1;
+    }
+
     const void print() const {
         std::cout << "Label id=" << id << (isInverse ? "-" : "+") << ", uid=" << uid << ": #sources=" << std::left << std::setw(8)
                   << getNumSources() << "#targets=" << std::setw(8) << getNumTargets() << "#edges="
-                  << std::setw(8) << getNumEdges() << std::endl;
+                  << std::setw(8) << getNumEdges() << "#sourceOut1=" << std::setw(8) << getSourceOut1()
+                  << "#targetIn1=" << std::setw(8) << getTargetIn1() << std::endl;
     }
 };
 

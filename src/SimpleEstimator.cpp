@@ -8,8 +8,12 @@
 
 // sort on the second item in the pair, then on the first (ascending order)
 bool SimpleEstimator::sortEdges(const std::pair<uint32_t,uint32_t> &a, const std::pair<uint32_t,uint32_t> &b) {
-    if (a.second < b.second) return true;
-    if (a.second == b.second) return a.first < b.first;
+//    if (a.second < b.second) return true;
+//    if (a.second == b.second) return a.first < b.first;
+
+    // Slight alteration, we want to sort on label instead.
+    if (a.first < b.first) return true;
+    if (a.first == b.first) return a.second < b.second;
     return false;
 }
 
@@ -70,20 +74,53 @@ void SimpleEstimator::prepare() {
         uint32_t prevTarget = 0;
         uint32_t prevLabel = 0;
         bool first = true;
+        uint32_t degreeCount = 0;
 
         for(const auto &edge : graph->adj[i]) {
             if (first || !(prevTarget == edge.second && prevLabel == edge.first)) {
+
+                if(!first && prevLabel != edge.first) {
+                    if(degreeCount == 1) labelData[prevLabel].incrementSourceOut1();
+                    degreeCount = 0;
+                }
+
                 labelData[edge.first].insertEdge(i, edge.second);
 
                 first = false;
                 prevTarget = edge.second;
                 prevLabel = edge.first;
+                degreeCount++;
             }
         }
+        if(degreeCount == 1) labelData[prevLabel].incrementSourceOut1();
+
+        prevTarget = 0;
+        prevLabel = 0;
+        first = true;
+        degreeCount = 0;
+
+        // Count which target vertices have an in degree of one.
+        for(const auto &edge : graph->reverse_adj[i]) {
+            if (first || !(prevTarget == edge.second && prevLabel == edge.first)) {
+
+                if(!first && prevLabel != edge.first) {
+                    if(degreeCount == 1) labelData[prevLabel].incrementTargetIn1();
+                    degreeCount = 0;
+                }
+
+                first = false;
+                prevTarget = edge.second;
+                prevLabel = edge.first;
+                degreeCount++;
+            }
+        }
+        if(degreeCount == 1) labelData[prevLabel].incrementTargetIn1();
     }
 
     for(uint32_t i = 0; i < graph->getNoLabels(); i++) {
         labelData[i].calculateSize();
+//        labelData[i].print();
+//        labelData[i + graph->getNoLabels()].print();
     }
 
     // Find all the join information.
@@ -97,7 +134,6 @@ void SimpleEstimator::prepare() {
     // Calculate the source and target nodes per label.
     for(auto &v : joinData) {
         for(auto &w : v) {
-
 
             // The total number of paths.
             uint32_t paths = 0;
@@ -167,78 +203,8 @@ void SimpleEstimator::prepare() {
             w.numPaths = paths;
             w.numSourceNodes = countBitsSet(&w.sourceNodes);
             w.numTargetNodes = countBitsSet(&w.targetNodes);
-
-//            std::cout << "(" << w.source << ", " << w.target << "): " << w.numSourceNodes << ", " << w.numTargetNodes << std::endl;
-
         }
     }
-
-//    // Calculate the distinct s,t pairs.
-//    for(auto &v : joinData) {
-//        for (auto &w : v) {
-//
-//            // The total number of s, t pairs.
-//            uint32_t paths = 0;
-//
-//            // We dont want to waste time on joins without any edges.
-//            if(w.numSourceNodes != 0) {
-//
-//                for(uint32_t i = 0; i < w.sourceNodes.size(); i++) {
-//                    auto bucket = w.sourceNodes[i];
-//
-//                    if(bucket != 0ULL) {
-//                        for(uint32_t j = 0; j < 64; j++) {
-//                            if(CHECK_BIT(bucket, j)) {
-//
-//                                std::unordered_set<uint32_t> pairs;
-//
-//                                // Check which vertices we can reach starting in the source node i * 64 + j.
-//                                for(const auto &edge : w.source < graph->getNoLabels() ? graph->adj[i * 64 + j] : graph->reverse_adj[i * 64 + j]) {
-//                                    if (edge.first == w.source % graph->getNoLabels()) {
-//
-//                                        for(const auto &edge2 : w.target < graph->getNoLabels() ? graph->adj[edge.second] : graph->reverse_adj[edge.second]) {
-//                                            if (edge.first == w.target % graph->getNoLabels()) {
-//
-//                                                pairs.insert(i * 64 + j + graph -> getNoVertices() * edge2.second);
-//                                            }
-//                                        }
-//                                    }
-//                                }
-//
-//                                paths += pairs.size();
-//                            }
-//                        }
-//                    }
-//                }
-//            }
-//
-//            w.uniquePaths = paths;
-//        }
-//    }
-
-//    for(const auto &data : labelData) {
-//        data.print();
-//    }
-//
-//    for(const auto &data : joinData) {
-//        for(const auto &data2 : data) {
-//            if(data2.numCommonNodes != 0) data2.print();
-//        }
-//    }
-
-    // do your prep here
-//
-//    auto v = doAnd(&joinData[1][8].commonNodes, &joinData[8][9].sourceNodes);
-//    std::cout << countBitsSet(&v) << std::endl;
-//
-//    auto a = doAnd(&joinData[1][8].targetNodes, &joinData[8][9].commonNodes);
-//    std::cout << countBitsSet(&a) << std::endl;
-//
-//    v = doAnd(&joinData[8][9].commonNodes, &joinData[9][8].sourceNodes);
-//    std::cout << countBitsSet(&v) << std::endl;
-//
-//    a = doAnd(&joinData[8][9].targetNodes, &joinData[9][8].commonNodes);
-//    std::cout << countBitsSet(&a) << std::endl;
 }
 
 cardStat SimpleEstimator::estimate(RPQTree *q) {
@@ -266,6 +232,36 @@ cardStat SimpleEstimator::estimate(RPQTree *q) {
     return static_cast<cardStat>(evaluation);
 }
 
+void estimateInAndOutCardinality(exCardStat* leftStat, exCardStat* rightStat, labelStat* leftData, labelStat* rightData,
+                                 joinStat* joinStat, double* noOut, double* noIn) {
+    /*
+         * During the join, use the fact that the difference between the two sets of
+         * target/source vertices we merge on is not necessarily the empty set.
+         *
+         * We know for example that certain target vertices in the left subtree
+         * are not succeeded by the starting label of the right tree.
+         *
+         * On the other hand, we have that certain vertices in the right subtree
+         * are not proceeded by the end label of the left tree.
+         */
+    // What is the number of edges that have been terminated and initialized during the merge?
+    uint32_t terminatedEdges = leftData->getNumEdges() - joinStat->numSourceEdges;
+    uint32_t initializedEdges = rightData->getNumEdges() - joinStat->numTargetEdges;
+
+    // What is the probability that a vertex ends up with no connected edges, when an edge gets removed?
+    // In other words, what is the chance that a vertex of degree one has its edge removed?
+    double pSourceRemove = (double) leftData->getSourceOut1() / leftData->getNumEdges();
+    double pTargetRemove = (double) rightData->getTargetIn1() / rightData->getNumEdges();
+
+    // What about higher degree edges? In certain cases we have a very low amount of degree 1 edges,
+    // and should thus compensate.
+
+    // So, what is the expected number of source and target vertices given the above probabilities?
+    // Here we do not simply subtract, as we would risk getting negative numbers.
+    *noOut = leftStat->noOut * (1 - (pSourceRemove * terminatedEdges) / leftData->getNumSources());
+    *noIn = rightStat->noIn * (1 - (pTargetRemove * initializedEdges) / rightData->getNumTargets());
+}
+
 exCardStat SimpleEstimator::doEstimation(RPQTree *q) {
     // Estimate only if we are a leaf or want to join.
     if(q -> isLeaf()) {
@@ -287,107 +283,55 @@ exCardStat SimpleEstimator::doEstimation(RPQTree *q) {
         exCardStat leftStat = doEstimation(q -> left);
         exCardStat rightStat = doEstimation(q -> right);
 
-//        leftStat.print();
-//        rightStat.print();
-
         auto leftData = &labelData[leftStat.vertices.back()];
         auto rightData = &labelData[rightStat.vertices.front()];
 
         // Get the join data of the join between the left and right labels.
         auto join = &joinData[leftStat.vertices.back()][rightStat.vertices.front()];
-//        join->print();
-
 
         double noOut = 0;
         double noPaths = 0;
         double noIn = 0;
 
-        if(leftStat.vertices.size() == 1) {
-            noOut = join->numSourceNodes;
-        } else {
-            noOut = leftStat.noOut;
+        // Estimate the noOut and noIn metric the old way.
+        estimateInAndOutCardinality(&leftStat, &rightStat, leftData, rightData, join, &noOut, &noIn);
+
+        // First of all, we have exact data on the number of (non-distinct) paths in the join,
+        // and the average expected number of paths in the join using the average in and out degree.
+        uint32_t maxPaths = join->numPaths;
+
+        // Using the above, we can determine the expected number of follow up edges.
+        // Note here that we use the raw path stats, since the max paths measure combined with
+        // the degree sum for a specific label already covers for the terminated/initialized edges.
+        double leftPathEstimation = leftStat.noPaths * (double) maxPaths / join->numSourceEdges;
+        double rightPathEstimation = rightStat.noPaths * (double) maxPaths / join->numTargetEdges;
+
+        // We can put a better bound on noOut and noIn by observing the join data.
+        if(leftStat.vertices.front() == leftStat.vertices.back()) {
+            noOut = std::min((double) join->numSourceEdges, noOut);
         }
 
-        if(rightStat.vertices.size() == 1) {
-            noIn = join->numTargetNodes;
-        } else {
-            noIn = rightStat.noIn;
+        if(rightStat.vertices.front() == rightStat.vertices.back()) {
+            noIn = std::min((double) join->numTargetEdges, noIn);
         }
 
-        if(leftStat.vertices.size() == 1 && rightStat.vertices.size() == 1) {
-
-            // We have accurate statistics for this case, so do a lookup.
-            noOut = join->numSourceNodes;
-            noIn = join->numTargetNodes;
-
-            // Possibly remove duplicates in paths.
-            noPaths = join->numPaths;
-
-        } else {
-
-
-
-
-            if(leftStat.vertices.size() > 1) {
-                // Recall the join made between the two left neighboring labels:
-                auto previousJoin = &joinData[leftStat.vertices.end()[-2]][leftStat.vertices.end()[-1]];
-
-                // Find out which of the source nodes in the join are part of the common nodes of the previous join.
-                auto usableSources = doAnd(&join->sourceNodes, &previousJoin->commonNodes);
-                auto numberOfUsableSources = countBitsSet(&usableSources);
-
-                // Compared to the interface, how many vertices used in the previous merge can now be used as sources?
-                double terminatedInCommon = (double) (previousJoin->numCommonNodes - numberOfUsableSources) / numberOfUsableSources;
-                noOut = leftStat.noOut * (1 - terminatedInCommon / previousJoin->numCommonNodes);
-            }
-
-
-            if(rightStat.vertices.size() > 1) {
-                // Recall the join made between the two right neighboring labels:
-                auto nextJoin = &joinData[rightStat.vertices.begin()[0]][rightStat.vertices.begin()[1]];
-
-                // Find out which of the source nodes in the join are part of the common nodes of the previous join.
-                auto usableSources = doAnd(&join->targetNodes, &nextJoin->commonNodes);
-                auto numberOfUsableTargets = countBitsSet(&usableSources);
-
-                // Compared to the interface, how many vertices used in the previous merge can now be used as targets?
-                double terminatedInCommon = (double) (nextJoin->numCommonNodes - numberOfUsableTargets) / numberOfUsableTargets;
-
-                noIn = rightStat.noIn * (1 - terminatedInCommon / nextJoin->numCommonNodes);
-            }
-
-
-
-            // First of all, we have exact data on the number of (non-distinct) paths in the join,
-            // and the average expected number of paths in the join using the average in and out degree.
-            uint32_t maxPaths = join->numPaths;
-
-            // Using the above, we can determine the expected number of follow up edges.
-            // Note here that we use the raw path stats, since the max paths measure combined with
-            // the degree sum for a specific label already covers for the terminated/initialized edges.
-            double leftPathEstimation = leftStat.noPaths * (double) maxPaths / join->numSourceEdges;
-            double rightPathEstimation = rightStat.noPaths * (double) maxPaths / join->numTargetEdges;
-
-//            noPaths = 0.33 * std::min(leftPathEstimation, rightPathEstimation) + 0.66 * std::max(leftPathEstimation, rightPathEstimation);
-            noPaths = (leftPathEstimation + rightPathEstimation) / 2;
-
-        }
+        noPaths = (leftPathEstimation + rightPathEstimation) / 2;
 
         if(abs(leftStat.vertices.back() - rightStat.vertices.front()) == graph -> getNoLabels()) {
             // We know that at least the number of edges minus the number of source nodes are duplicates.
             unsigned long minimumDuplicateCount = leftData->getNumEdges() - leftData->getNumSources();
-            noPaths *= (1 - (double) minimumDuplicateCount / join->numPaths);
+            noPaths -= minimumDuplicateCount;
         }
 
         // How many of the given paths is a duplicate?
         // For now, we just take the probability that the source and the target are equal:
-        double pDuplicate = 1.0 / (leftData->getNumSources() + rightData->getNumTargets());
-        noPaths *= (1 - pDuplicate);
+//        double pDuplicate = 1.0 / (leftData->getNumSources() + rightData->getNumTargets());
+//        noPaths *= (1 - pDuplicate);
 
         // Try to merge the two estimates with the join cardinality formula, with uniformity assumptions.
         exCardStat result = exCardStat {
                 noOut,
-                noPaths,
+                std::min(noPaths, noOut * noIn),
                 noIn
         };
 
