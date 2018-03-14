@@ -9,11 +9,19 @@ SimpleEvaluator::SimpleEvaluator(std::shared_ptr<SimpleGraph> &g) {
 
     // works only with SimpleGraph
     graph = g;
+    est = nullptr; // estimator not attached by default
+}
+
+void SimpleEvaluator::attachEstimator(std::shared_ptr<SimpleEstimator> &e) {
+    est = e;
 }
 
 void SimpleEvaluator::prepare() {
 
-    // nothing to prepare..
+    // if attached, prepare the estimator
+    if(est != nullptr) est->prepare();
+
+    // prepare other things here.., if necessary
 
 }
 
@@ -22,9 +30,10 @@ cardStat SimpleEvaluator::computeStats(std::shared_ptr<SimpleGraph> &g) {
     cardStat stats {};
 
     for(int source = 0; source < g->getNoVertices(); source++) {
-        stats.noPaths += g->adj[source].size();
         if(!g->adj[source].empty()) stats.noOut++;
     }
+
+    stats.noPaths = g->getNoDistinctEdges();
 
     for(int target = 0; target < g->getNoVertices(); target++) {
         if(!g->reverse_adj[target].empty()) stats.noIn++;
