@@ -15,6 +15,13 @@ struct vertexStat {
     std::map<uint32_t, uint32_t> labelInDegrees;
 };
 
+struct nodeType {
+
+    std::unordered_set<uint32_t> outNodes;
+    std::unordered_set<uint32_t> outPredicates;
+    std::unordered_set<uint32_t> inPredicates;
+};
+
 // A data structure holding information about labels in the graph.
 struct labelStat {
     // The set of distinct source and target vertices in the label collection.

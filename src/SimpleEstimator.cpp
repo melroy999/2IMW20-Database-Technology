@@ -5,6 +5,7 @@
 #include "SimpleGraph.h"
 #include "SimpleEstimator.h"
 #include <cmath>
+#include <set>
 
 SimpleEstimator::SimpleEstimator(std::shared_ptr<SimpleGraph> &g){
 
@@ -17,6 +18,51 @@ void SimpleEstimator::prepare() {
     // Initialise vectors with lengths corresponding to num vertices or labels.
     vertexData = std::vector<vertexStat>(graph -> getNoVertices());
     labelData = std::vector<labelStat>(graph -> getNoLabels());
+
+    auto nodeTypes = std::vector<nodeType>(graph -> getNoVertices());
+
+    // We loop over every resource (node) in the graph to obtain the type of every node
+
+    for(uint32_t i = 0; i < graph -> getNoVertices(); i++) {
+
+        for(auto v : graph -> adj[i]) {
+
+            nodeTypes[i].outNodes.insert(v.second);
+            nodeTypes[i].outPredicates.insert(v.first);
+            nodeTypes[v.second].inPredicates.insert(v.first);
+        }
+    }
+
+    // Merge all resources with the same type into buckets
+
+    std::vector<std::set<uint32_t>> buckets;
+    std::vector<nodeType> bucketDefinitions;
+
+
+
+    for(uint32_t i = 0; i < graph -> getNoVertices(); i++) {
+
+        for(nodeType classData : nodeTypes){
+
+            
+        }
+
+        auto pred = [](const nodeType & item) {
+            return item.outNodes == ;
+        };
+
+        ptrdiff_t pos = std::find(bucketDefinitions.begin(), bucketDefinitions.end(), nodeTypes[i]) - bucketDefinitions.begin();
+
+        if(pos >= bucketDefinitions.size()) {
+            //old_name_ not found
+            pos = bucketDefinitions.size();
+//            bucketDefinitions[bucketDefinitions.size()] = nodeTypes[i];
+            buckets[pos] = {};
+        }
+
+        buckets[pos].insert({i});
+    }
+
 
     /*
      * Per label, gather the set of distinct source and target vertices,
