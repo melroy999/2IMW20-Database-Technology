@@ -185,7 +185,7 @@ int main(int argc, char *argv[]) {
     std::string graphFile {argv[1]};
     std::string queriesFile {argv[2]};
 
-//    estimatorBench(graphFile, queriesFile);
+    estimatorBench(graphFile, queriesFile);
     evaluatorBench(graphFile, queriesFile);
 
     return 0;
