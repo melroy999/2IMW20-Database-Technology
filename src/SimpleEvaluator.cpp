@@ -140,7 +140,86 @@ std::shared_ptr<SimpleGraph> SimpleEvaluator::evaluate_aux(RPQTree *q) {
     return nullptr;
 }
 
+std::string SimpleEvaluator::rewrite_query_tree(RPQTree *q) {
+
+    // evaluate according to the AST bottom-up
+
+    if(q->isLeaf()) {
+
+        std::string label = q->data;
+        return label;
+    }
+
+    if(q->isConcat()) {
+
+        std::string rightLabel = SimpleEvaluator::rewrite_query_tree(q->right);
+        std::string leftLabel = SimpleEvaluator::rewrite_query_tree(q->left);
+        std::string full = "(" + leftLabel + "/" + rightLabel + ")";
+        RPQTree * newTree = RPQTree::strToTree(full);
+        labelPairs.emplace_back(newTree);
+
+        cardStat estimate = est->estimate(newTree);
+        estimates.emplace_back(estimate.noPaths);
+
+        return rightLabel;
+    }
+
+    return nullptr;
+}
+
+std::string SimpleEvaluator::get_string_query(RPQTree *q) {
+
+    // evaluate according to the AST bottom-up
+
+    if(q->isLeaf()) {
+
+        std::string label = q->data;
+        return label;
+    }
+
+    if(q->isConcat()) {
+
+        std::string rightLabel = SimpleEvaluator::get_string_query(q->right);
+        std::string leftLabel = SimpleEvaluator::get_string_query(q->left);
+        std::string full = "(" + leftLabel + "/" + rightLabel + ")";
+        return full;
+    }
+
+    return nullptr;
+}
+
 cardStat SimpleEvaluator::evaluate(RPQTree *query) {
+
+    // Get the estimates for all possible pairs in the tree
+    rewrite_query_tree(query);
+    std::string queryAsString = get_string_query(query);
+
+    // Use the lowest estimate to rewrite the query so that pair is a leaf pair
+    long min_index = std::min_element(estimates.begin(), estimates.end()) - estimates.begin();
+    RPQTree * minPair = labelPairs.at(min_index);
+    std::string newString = "(" + minPair->left->data + "/" + minPair->right->data + "))";
+
+
+    // project out the label in the AST
+    std::regex leftBracket (R"([\+\-]\d\(\/[\+\-]\d)");
+    std::regex rightBracket (R"([\+\-]\d\)\/[\+\-]\d)");
+    std::smatch matches;
+
+    uint32_t label;
+    bool inverse;
+
+    if(std::regex_search(queryAsString, matches, rightBracket)) {
+        label = (uint32_t) std::stoul(matches[1]);
+        query
+        newString = "(" + minPair->left->data + "/" + minPair->right->data + "))";
+        queryAsString = std::regex_replace(queryAsString, rightBracket)
+
+    } else if(std::regex_search(queryAsString, matches, leftBracket)) {
+        label = (uint32_t) std::stoul(matches[1]);
+        newString = "((" + minPair->left->data + "/" + minPair->right->data + ")";
+
+    }
+
     auto res = evaluate_aux(query);
     return SimpleEvaluator::computeStats(res);
 }
