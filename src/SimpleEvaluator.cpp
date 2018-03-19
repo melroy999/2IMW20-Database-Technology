@@ -140,31 +140,40 @@ std::shared_ptr<SimpleGraph> SimpleEvaluator::evaluate_aux(RPQTree *q) {
     return nullptr;
 }
 
-std::string SimpleEvaluator::rewrite_query_tree(RPQTree *q) {
-
-    // evaluate according to the AST bottom-up
+/**
+ * Perform post-order tree traversal to get all possible pairs (that is left to right)
+ * @param q
+ * @return
+ */
+std::string SimpleEvaluator::rewrite_query_tree(RPQTree *q, std::string label) {
 
     if(q->isLeaf()) {
 
-        std::string label = q->data;
-        return label;
+        if(!label.empty()){
+
+            std::string full = "(" + label + "/" + q->data + ")";
+            RPQTree * newTree = RPQTree::strToTree(full);
+            labelPairs.emplace_back(newTree);
+
+            cardStat estimate = est->estimate(newTree);
+            estimates.emplace_back(estimate.noPaths);
+        }
+
+        return q->data;
     }
 
     if(q->isConcat()) {
 
-        std::string rightLabel = SimpleEvaluator::rewrite_query_tree(q->right);
-        std::string leftLabel = SimpleEvaluator::rewrite_query_tree(q->left);
-        std::string full = "(" + leftLabel + "/" + rightLabel + ")";
-        RPQTree * newTree = RPQTree::strToTree(full);
-        labelPairs.emplace_back(newTree);
+        // Traverse the left subtree recursively
+        std::string leftLabel = SimpleEvaluator::rewrite_query_tree(q->left, label);
 
-        cardStat estimate = est->estimate(newTree);
-        estimates.emplace_back(estimate.noPaths);
+        // Traverse the right tree recursively
+        std::string rightLabel = SimpleEvaluator::rewrite_query_tree(q->right, leftLabel);
 
         return rightLabel;
     }
 
-    return nullptr;
+    return "";
 }
 
 std::string SimpleEvaluator::get_string_query(RPQTree *q) {
@@ -191,35 +200,26 @@ std::string SimpleEvaluator::get_string_query(RPQTree *q) {
 cardStat SimpleEvaluator::evaluate(RPQTree *query) {
 
     // Get the estimates for all possible pairs in the tree
-    rewrite_query_tree(query);
+    rewrite_query_tree(query, "");
     std::string queryAsString = get_string_query(query);
 
     // Use the lowest estimate to rewrite the query so that pair is a leaf pair
     long min_index = std::min_element(estimates.begin(), estimates.end()) - estimates.begin();
     RPQTree * minPair = labelPairs.at(min_index);
-    std::string newString = "(" + minPair->left->data + "/" + minPair->right->data + "))";
 
+    std::string leftBracket = minPair->left->data + ")/" + minPair->right->data;
+    std::string rightBracket = minPair->left->data + "/(" + minPair->right->data;
 
-    // project out the label in the AST
-    std::regex leftBracket (R"([\+\-]\d\(\/[\+\-]\d)");
-    std::regex rightBracket (R"([\+\-]\d\)\/[\+\-]\d)");
-    std::smatch matches;
+    if (queryAsString.find(leftBracket) != std::string::npos) {
 
-    uint32_t label;
-    bool inverse;
+        queryAsString.replace(queryAsString.find(leftBracket),leftBracket.length(), "(" + minPair->left->data + "/" + minPair->right->data + "))");
+    }
+    else if(queryAsString.find(rightBracket) != std::string::npos){
 
-    if(std::regex_search(queryAsString, matches, rightBracket)) {
-        label = (uint32_t) std::stoul(matches[1]);
-        query
-        newString = "(" + minPair->left->data + "/" + minPair->right->data + "))";
-        queryAsString = std::regex_replace(queryAsString, rightBracket)
-
-    } else if(std::regex_search(queryAsString, matches, leftBracket)) {
-        label = (uint32_t) std::stoul(matches[1]);
-        newString = "((" + minPair->left->data + "/" + minPair->right->data + ")";
-
+        queryAsString.replace(queryAsString.find(rightBracket),rightBracket.length(), "((" + minPair->left->data + "/" + minPair->right->data + ")");
     }
 
+    query = RPQTree::strToTree(queryAsString);
     auto res = evaluate_aux(query);
     return SimpleEvaluator::computeStats(res);
 }
