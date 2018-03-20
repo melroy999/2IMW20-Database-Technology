@@ -266,10 +266,17 @@ exCardStat SimpleEstimator::estimateSimpleJoin(exCardStat *leftStat, exCardStat 
     // Get the join data of the join between the left and right labels.
     auto join = &joinData[leftStat->vertices.back()][rightStat->vertices.front()];
 
+    // De-duplication factor.
+    uint32_t dedup = 0;
+    if(abs(leftStat->vertices.back() - rightStat->vertices.front()) == graph -> getNoLabels()) {
+        // We know that at least the number of edges minus the number of source nodes are duplicates.
+        dedup = join->numSourceEdges - join->numSourceNodes;
+    }
+
     // Copy over the data.
     return exCardStat {
             static_cast<double>(join->numSourceNodes),
-            static_cast<double>(join->numPaths),
+            static_cast<double>(join->numPaths - dedup),
             static_cast<double>(join->numTargetNodes)
     };
 }
@@ -312,39 +319,6 @@ void estimateInAndOutCardinality(exCardStat* leftStat, exCardStat* rightStat, la
  * @return The cardinality data of the join between two sub-queries.
  */
 exCardStat SimpleEstimator::estimateJoin(exCardStat *leftStat, exCardStat *rightStat) {
-
-//    // Get the join data of the join between the left and right labels.
-//    auto join = &joinData[leftStat->vertices.back()][rightStat->vertices.front()];
-//
-//    // First, determine the actual sources, targets, and common nodes in relation to the neighboring joins.
-//    auto validSources = join->sourceNodes;
-//    auto validCommons = join->commonNodes;
-//    auto validTargets = join->targetNodes;
-//
-//    if(leftStat->vertices.size() > 1) {
-//        auto prevJoin = &joinData[leftStat->vertices.end()[-2]][leftStat->vertices.end()[-1]];
-//
-//        // Determine which of the source nodes in join are valid.
-//        validSources = doAnd(&prevJoin->commonNodes, &validSources);
-//        validCommons = doAnd(&prevJoin->targetNodes, &validCommons);
-//    }
-//
-//    if(rightStat->vertices.size() > 1) {
-//        auto nextJoin = &joinData[rightStat->vertices[0]][rightStat->vertices[1]];
-//
-//        // Determine which of the source nodes in join are valid.
-//        validTargets = doAnd(&nextJoin->commonNodes, &validTargets);
-//        validCommons = doAnd(&nextJoin->sourceNodes, &validCommons);
-//    }
-//
-//    // Calculate what percentage of the source, target and common nodes we have retained.
-//    auto sourceRetention = (double) countBitsSet(&validSources) / join->numSourceNodes;
-//    auto commonRetention = (double) countBitsSet(&validCommons) / join->numCommonNodes;
-//    auto targetRetention = (double) countBitsSet(&validTargets) / join->numTargetNodes;
-//
-//    double noOut = leftStat->noOut;
-//    double noPaths = 0;
-//    double noIn = rightStat->noIn;
 
     auto leftData = &labelData[leftStat->vertices.back()];
     auto rightData = &labelData[rightStat->vertices.front()];
