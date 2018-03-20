@@ -32,7 +32,7 @@ public:
 
     std::shared_ptr<SimpleGraph> evaluate_aux(RPQTree *q);
     RPQTree * get_pairs(RPQTree *q, RPQTree *currentTree, RPQTree *bestTree);
-    RPQTree * rewrite_tree(RPQTree *q, RPQTree *newTree);
+    RPQTree * rewrite_query_tree(RPQTree *q);
     std::string get_string_query(RPQTree *q);
     static std::shared_ptr<SimpleGraph> project(uint32_t label, bool inverse, std::shared_ptr<SimpleGraph> &g);
     static std::shared_ptr<SimpleGraph> join(std::shared_ptr<SimpleGraph> &left, std::shared_ptr<SimpleGraph> &right);

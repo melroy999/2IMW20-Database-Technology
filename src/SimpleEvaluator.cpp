@@ -5,6 +5,8 @@
 #include "SimpleEstimator.h"
 #include "SimpleEvaluator.h"
 
+#include <regex>
+
 SimpleEvaluator::SimpleEvaluator(std::shared_ptr<SimpleGraph> &g) {
 
     // works only with SimpleGraph
@@ -203,79 +205,6 @@ RPQTree * SimpleEvaluator::get_pairs(RPQTree *q, RPQTree *currentTree, RPQTree *
     return nullptr;
 }
 
-bool found_left = false;
-
-RPQTree * SimpleEvaluator::rewrite_tree(RPQTree *q, RPQTree *newTree) {
-
-    // If we encounter a node which is equal to the tree being looked for, return that tree
-
-    std::string queryString = get_string_query(q);
-    std::string newString = get_string_query(newTree);
-
-    if(queryString == newString){
-
-        return q;
-    }
-
-    // Traverse the tree all the way to the left hand side
-
-    if(q->isConcat()){
-
-        RPQTree *leftTree = SimpleEvaluator::rewrite_tree(q->left, newTree);
-        q->left = leftTree;
-
-        // Once there is nothing on the left of the tree anymore,
-        // check if the right of the node, is the same as the left hand part of the new tree
-
-        std::string leftSide = get_string_query(newTree->left);
-        std::string rightNodeText = get_string_query(q->right);
-
-        if(leftSide == rightNodeText && !found_left){
-
-            // If so, remove the right hand side and bump up the left hand side of the tree
-
-            q = q->left;
-            found_left = true;
-            return q;
-        }
-
-
-        // Check if we are at a node where it is the same as the right hand side of the new tree,
-        // and if so, replace the node with the contents of the new tree
-
-        std::string rightSide = get_string_query(newTree->right);
-
-        if(queryString == rightSide && found_left){
-
-            return newTree;
-        }
-
-        // If none of this holds, keep traversing right until we find something
-
-        RPQTree *rightTree = SimpleEvaluator::rewrite_tree(q->right, newTree);
-        q->right = rightTree;
-
-        return q;
-    }
-
-    if(q->isLeaf()){
-
-        // Check if we are at a node where it is the same as the right hand side of the new tree,
-        // and if so, replace the node with the contents of the new tree
-
-        std::string rightSide = get_string_query(newTree->right);
-
-        if(queryString == rightSide && found_left){
-
-            return newTree;
-        }
-
-        return q;
-    }
-
-    return nullptr;
-}
-
 std::string SimpleEvaluator::get_string_query(RPQTree *q) {
 
     // evaluate according to the AST bottom-up
@@ -297,7 +226,7 @@ std::string SimpleEvaluator::get_string_query(RPQTree *q) {
     return nullptr;
 }
 
-cardStat SimpleEvaluator::evaluate(RPQTree *query) {
+RPQTree * SimpleEvaluator::rewrite_query_tree(RPQTree *query) {
 
     RPQTree *bestTree = nullptr;
     std::string oldQuery = get_string_query(query);
@@ -306,7 +235,6 @@ cardStat SimpleEvaluator::evaluate(RPQTree *query) {
     do{
         labelPairs.clear();
         estimates.clear();
-        found_left = false;
         oldQuery = get_string_query(query);
 
         // Get the estimates for all possible pairs in the tree
@@ -319,14 +247,54 @@ cardStat SimpleEvaluator::evaluate(RPQTree *query) {
             long min_index = std::min_element(estimates.begin(), estimates.end()) - estimates.begin();
             RPQTree * minPair = labelPairs.at(min_index);
 
-            query = rewrite_tree(query, minPair);
-            newQuery = get_string_query(query);
+            // replace all occurrences of + or - with escaped variants
+            std::regex rgx_Meta (R"(([\^\$\\\.\+\?\(\)\[\]\{\}\|]))");
+            std::string leftPair = std::regex_replace(get_string_query(minPair->left), rgx_Meta, R"(\$1)");
+            std::string rightPair = std::regex_replace(get_string_query(minPair->right), rgx_Meta, R"(\$1)");
+
+            std::string leftBracket = leftPair + "\\)+/" + rightPair;
+            std::string rightBracket = leftPair + "/\\(+" + rightPair;
+            std::string bothBrackets = leftPair + "\\)+/\\(+" + rightPair;
+
+            std::regex lr(leftBracket);
+            std::regex rr(rightBracket);
+            std::regex br(bothBrackets);
+
+            std::string minPairString = get_string_query(minPair);
+
+            if (std::regex_search (oldQuery, rr)){
+
+                newQuery = std::regex_replace(oldQuery, rr, "(" + minPairString);
+            }
+            else if(std::regex_search (oldQuery, lr)){
+
+                newQuery = std::regex_replace(oldQuery, lr, minPairString + ")");
+            }
+            else if(std::regex_search (oldQuery, br)){
+
+                newQuery = std::regex_replace(oldQuery, br, minPairString);
+            }
+            else{
+                newQuery = oldQuery;
+            }
+
+            query = RPQTree::strToTree(newQuery);
+
             bestTree = minPair;
         }
     }
     while(!estimates.empty() && newQuery != oldQuery);
 
-    std::string queryAsString = get_string_query(query);
+    return query;
+}
+
+cardStat SimpleEvaluator::evaluate(RPQTree *query) {
+
+    if(est){
+
+        query = rewrite_query_tree(query);
+    }
+
     auto res = evaluate_aux(query);
     return SimpleEvaluator::computeStats(res);
 }
