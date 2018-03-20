@@ -15,8 +15,11 @@
 
 class SimpleGraph : public Graph {
 public:
-    std::vector<std::vector<std::pair<uint32_t,uint32_t>>> adj;
-    std::vector<std::vector<std::pair<uint32_t,uint32_t>>> reverse_adj; // vertex adjacency list
+    std::vector<std::vector<std::vector<uint32_t>>> adj;
+    std::vector<std::vector<std::vector<uint32_t>>> reverse_adj;
+
+//    std::vector<std::vector<std::pair<uint32_t,uint32_t>>> adj;
+//    std::vector<std::vector<std::pair<uint32_t,uint32_t>>> reverse_adj; // vertex adjacency list
 protected:
     uint32_t V;
     uint32_t L;
@@ -38,6 +41,7 @@ public:
     void setNoVertices(uint32_t n);
     void setNoLabels(uint32_t noLabels);
 
+    void setDataStructureSizes();
 };
 
 #endif //QS_SIMPLEGRAPH_H

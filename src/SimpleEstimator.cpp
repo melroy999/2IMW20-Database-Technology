@@ -5,15 +5,7 @@
 #include <SimpleEstimator.h>
 
 #define CHECK_BIT(var,pos) ((var) & (1ULL<<(pos)))
-#define SET_BIT(pos) (1ULL << (pos % 64))
-
-// sort on the second item in the pair, then on the first (ascending order)
-bool SimpleEstimator::sortEdges(const std::pair<uint32_t,uint32_t> &a, const std::pair<uint32_t,uint32_t> &b) {
-    // Slight alteration, we want to sort on label instead.
-    if (a.first < b.first) return true;
-    if (a.first == b.first) return a.second < b.second;
-    return false;
-}
+#define SET_BIT(pos) (1ULL << ((pos) % 64))
 
 SimpleEstimator::SimpleEstimator(std::shared_ptr<SimpleGraph> &g){
 
@@ -63,62 +55,52 @@ void SimpleEstimator::prepare() {
         labelData[i + graph->getNoLabels()].setTwin(&labelData[i]);
     }
 
-    for(uint32_t i = 0; i < graph->getNoVertices(); i++) {
-        // Presort both the adjacency and reverse adjacency graphs.
-        std::sort(graph -> adj[i].begin(), graph -> adj[i].end(), sortEdges);
-        std::sort(graph -> reverse_adj[i].begin(), graph -> reverse_adj[i].end(), sortEdges);
+    for(uint32_t label = 0; label < graph->getNoLabels(); label++) {
+        for (uint32_t vertex = 0; vertex < graph->getNoVertices(); vertex++) {
+            // Presort both the adjacency and reverse adjacency graphs.
+            std::sort(graph->adj[label][vertex].begin(), graph->adj[label][vertex].end());
+            std::sort(graph->reverse_adj[label][vertex].begin(), graph->reverse_adj[label][vertex].end());
 
-        // Filter out duplicates.
-        uint32_t prevTarget = 0;
-        uint32_t prevLabel = 0;
-        bool first = true;
-        uint32_t degreeCount = 0;
+            // Filter out duplicates.
+            uint32_t prevTarget = 0;
+            bool first = true;
+            uint32_t degreeCount = 0;
 
-        for(const auto &edge : graph->adj[i]) {
-            if (first || !(prevTarget == edge.second && prevLabel == edge.first)) {
+            for (const auto &target : graph->adj[label][vertex]) {
+                if (first || prevTarget != target) {
 
-                if(!first && prevLabel != edge.first) {
-                    if(degreeCount == 1) labelData[prevLabel].incrementSourceOut1();
-                    degreeCount = 0;
+                    labelData[label].insertEdge(vertex, target);
+
+                    first = false;
+                    prevTarget = target;
+                    degreeCount++;
                 }
-
-                labelData[edge.first].insertEdge(i, edge.second);
-
-                first = false;
-                prevTarget = edge.second;
-                prevLabel = edge.first;
-                degreeCount++;
             }
-        }
-        if(degreeCount == 1) labelData[prevLabel].incrementSourceOut1();
 
-        prevTarget = 0;
-        prevLabel = 0;
-        first = true;
-        degreeCount = 0;
+            // Count which vertices have an out degree of one with respect to the current label.
+            if (degreeCount == 1) labelData[label].incrementSourceOut1();
 
-        // Count which target vertices have an in degree of one.
-        for(const auto &edge : graph->reverse_adj[i]) {
-            if (first || !(prevTarget == edge.second && prevLabel == edge.first)) {
+            // Filter out duplicates.
+            prevTarget = 0;
+            first = true;
+            degreeCount = 0;
 
-                if(!first && prevLabel != edge.first) {
-                    if(degreeCount == 1) labelData[prevLabel].incrementTargetIn1();
-                    degreeCount = 0;
+            for (const auto &source : graph->reverse_adj[label][vertex]) {
+                if (first || prevTarget != source) {
+
+                    first = false;
+                    prevTarget = source;
+                    degreeCount++;
                 }
-
-                first = false;
-                prevTarget = edge.second;
-                prevLabel = edge.first;
-                degreeCount++;
             }
+
+            // Count which vertices have an in degree of one with respect to the current label.
+            if (degreeCount == 1) labelData[label].incrementTargetIn1();
         }
-        if(degreeCount == 1) labelData[prevLabel].incrementTargetIn1();
     }
 
     for(uint32_t i = 0; i < graph->getNoLabels(); i++) {
         labelData[i].calculateSize();
-//        labelData[i].print();
-//        labelData[i + graph->getNoLabels()].print();
     }
 
     // Find all the join information.
@@ -135,10 +117,6 @@ void SimpleEstimator::prepare() {
 
             // The total number of paths, and the distinct number of pairs.
             uint32_t paths = 0;
-//            uint32_t pairs = 0;
-
-            // A scratch list to keep all the found edges.
-//            auto pairCollection = std::vector<uint64_t>(2 * noBins);
 
             // We dont want to waste time on joins without any edges.
             if(w.numCommonNodes != 0) {
@@ -157,55 +135,37 @@ void SimpleEstimator::prepare() {
 
                                 // Filter out duplicates.
                                 uint32_t prevTarget = 0;
-                                uint32_t prevLabel = 0;
                                 bool first = true;
 
-                                for(const auto &edge : w.source < graph->getNoLabels() ? graph->reverse_adj[i * 64 + j] : graph->adj[i * 64 + j]) {
-                                    if(edge.first == w.source % graph->getNoLabels()) {
+                                for(const auto &target : w.source < graph->getNoLabels() ?
+                                                       graph->reverse_adj[w.source % graph->getNoLabels()][i * 64 + j] :
+                                                       graph->adj[w.source % graph->getNoLabels()][i * 64 + j])
+                                {
+                                    if (first || prevTarget != target) {
+                                        w.sourceNodes[target / 64] |= SET_BIT(target);
+                                        sources++;
+                                        w.numSourceEdges++;
 
-                                        if (first || !(prevTarget == edge.second && prevLabel == edge.first)) {
-                                            w.sourceNodes[edge.second / 64] |= SET_BIT(edge.second);
-                                            sources++;
-                                            w.numSourceEdges++;
-
-                                            // Works incorrectly.
-//                                            if(!CHECK_BIT(pairCollection[edge.second / 64], edge.second % 64) || !CHECK_BIT(pairCollection[noBins + i / 64], i % 64)) {
-//                                                pairs++;
-//                                                pairCollection[edge.second / 64] |= SET_BIT(edge.second);
-//                                                pairCollection[noBins + i / 64] |= SET_BIT(i);
-//                                            }
-
-                                            first = false;
-                                            prevTarget = edge.second;
-                                            prevLabel = edge.first;
-                                        }
+                                        first = false;
+                                        prevTarget = target;
                                     }
                                 }
 
                                 prevTarget = 0;
-                                prevLabel = 0;
                                 first = true;
 
                                 int targets = 0;
-                                for(const auto &edge : w.target < graph->getNoLabels() ? graph->adj[i * 64 + j] : graph->reverse_adj[i * 64 + j]) {
-                                    if(edge.first == w.target % graph->getNoLabels()) {
+                                for(const auto &target : w.target < graph->getNoLabels() ?
+                                                       graph->adj[w.target % graph->getNoLabels()][i * 64 + j] :
+                                                       graph->reverse_adj[w.target % graph->getNoLabels()][i * 64 + j])
+                                {
+                                    if (first || prevTarget != target) {
+                                        w.targetNodes[target / 64] |= SET_BIT(target);
+                                        targets++;
+                                        w.numTargetEdges++;
 
-                                        if (first || !(prevTarget == edge.second && prevLabel == edge.first)) {
-                                            w.targetNodes[edge.second / 64] |= SET_BIT(edge.second);
-                                            targets++;
-                                            w.numTargetEdges++;
-
-                                            // Works incorrectly.
-//                                            if(!CHECK_BIT(pairCollection[noBins + edge.second / 64], edge.second % 64) || !CHECK_BIT(pairCollection[i / 64], i % 64)) {
-//                                                pairs++;
-//                                                pairCollection[noBins + edge.second / 64] |= SET_BIT(edge.second);
-//                                                pairCollection[i / 64] |= SET_BIT(i);
-//                                            }
-
-                                            first = false;
-                                            prevTarget = edge.second;
-                                            prevLabel = edge.first;
-                                        }
+                                        first = false;
+                                        prevTarget = target;
                                     }
                                 }
 
@@ -217,7 +177,6 @@ void SimpleEstimator::prepare() {
             }
 
             w.numPaths = paths;
-//            w.uniquePaths = pairs;
             w.numSourceNodes = countBitsSet(&w.sourceNodes);
             w.numTargetNodes = countBitsSet(&w.targetNodes);
         }
