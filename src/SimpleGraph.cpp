@@ -78,6 +78,20 @@ void SimpleGraph::addEdge(uint32_t from, uint32_t to, uint32_t edgeLabel) {
     reverse_adj[edgeLabel][to].emplace_back(from);
 }
 
+void SimpleGraph::addEdges(std::shared_ptr<SimpleGraph> &in, uint32_t projectLabel, bool isInverse) {
+
+    auto _adj = &in->adj[projectLabel];
+    auto _reverse_adj = &in->reverse_adj[projectLabel];
+
+    if(!isInverse) {
+        adj_ptr = _adj;
+        reverse_adj_ptr = _reverse_adj;
+    } else {
+        adj_ptr = _reverse_adj;
+        reverse_adj_ptr = _adj;
+    }
+}
+
 void SimpleGraph::readFromContiguousFile(const std::string &fileName) {
 
     std::string line;

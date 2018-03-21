@@ -18,8 +18,10 @@ public:
     std::vector<std::vector<std::vector<uint32_t>>> adj;
     std::vector<std::vector<std::vector<uint32_t>>> reverse_adj;
 
-//    std::vector<std::vector<std::pair<uint32_t,uint32_t>>> adj;
-//    std::vector<std::vector<std::pair<uint32_t,uint32_t>>> reverse_adj; // vertex adjacency list
+    // Pointers to vectors in another vector, used to speed up certain operations.
+    std::vector<std::vector<uint32_t>> *adj_ptr = nullptr;
+    std::vector<std::vector<uint32_t>> *reverse_adj_ptr = nullptr;
+
 protected:
     uint32_t V;
     uint32_t L;
@@ -42,6 +44,8 @@ public:
     void setNoLabels(uint32_t noLabels);
 
     void setDataStructureSizes();
+
+    void addEdges(std::shared_ptr<SimpleGraph> &in, uint32_t projectLabel, bool isInverse);
 };
 
 #endif //QS_SIMPLEGRAPH_H
