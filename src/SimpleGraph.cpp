@@ -12,44 +12,65 @@ uint32_t SimpleGraph::getNoVertices() const {
     return V;
 }
 
+void SimpleGraph::setDataStructureSizes() {
+    adj.resize(getNoLabels());
+    reverse_adj.resize(getNoLabels());
+
+    for (auto &l : adj)
+        l.resize(V);
+
+    for (auto &l : reverse_adj)
+        l.resize(V);
+}
+
 void SimpleGraph::setNoVertices(uint32_t n) {
     V = n;
-    adj.resize(V);
-    reverse_adj.resize(V);
 }
 
 uint32_t SimpleGraph::getNoEdges() const {
     uint32_t sum = 0;
-    for (const auto & l : adj)
-        sum += l.size();
+    for (const auto &l : adj)
+        for(const auto &v : l)
+            sum += v.size();
     return sum;
-}
-
-// sort on the second item in the pair, then on the first (ascending order)
-bool sortPairs(const std::pair<uint32_t,uint32_t> &a, const std::pair<uint32_t,uint32_t> &b) {
-    if (a.second < b.second) return true;
-    if (a.second == b.second) return a.first < b.first;
-    return false;
 }
 
 uint32_t SimpleGraph::getNoDistinctEdges() const {
 
     uint32_t sum = 0;
 
-    for (auto sourceVec : adj) {
+    if(adj_ptr) {
+        for (auto sourceVec : *adj_ptr) {
 
-        std::sort(sourceVec.begin(), sourceVec.end(), sortPairs);
+            std::sort(sourceVec.begin(), sourceVec.end());
 
-        uint32_t prevTarget = 0;
-        uint32_t prevLabel = 0;
-        bool first = true;
+            uint32_t prevTarget = 0;
+            bool first = true;
 
-        for (const auto &labelTgtPair : sourceVec) {
-            if (first || !(prevTarget == labelTgtPair.second && prevLabel == labelTgtPair.first)) {
-                first = false;
-                sum++;
-                prevTarget = labelTgtPair.second;
-                prevLabel = labelTgtPair.first;
+            for (const auto &target : sourceVec) {
+                if (first || prevTarget != target) {
+                    first = false;
+                    sum++;
+                    prevTarget = target;
+                }
+            }
+        }
+    }
+
+    for (const auto &labelVec : adj) {
+        for (auto sourceVec : labelVec) {
+
+            std::sort(sourceVec.begin(), sourceVec.end());
+
+            uint32_t prevTarget = 0;
+            bool first = true;
+
+            for (const auto &target : sourceVec) {
+                if (first || prevTarget != target) {
+                    first = false;
+                    sum++;
+                    prevTarget = target;
+                }
             }
         }
     }
@@ -70,43 +91,61 @@ void SimpleGraph::addEdge(uint32_t from, uint32_t to, uint32_t edgeLabel) {
         throw std::runtime_error(std::string("Edge data out of bounds: ") +
                                          "(" + std::to_string(from) + "," + std::to_string(to) + "," +
                                          std::to_string(edgeLabel) + ")");
-    adj[from].emplace_back(std::make_pair(edgeLabel, to));
-    reverse_adj[to].emplace_back(std::make_pair(edgeLabel, from));
+
+    adj[edgeLabel][from].emplace_back(to);
+    reverse_adj[edgeLabel][to].emplace_back(from);
+}
+
+void SimpleGraph::addEdges(std::shared_ptr<SimpleGraph> &in, uint32_t projectLabel, bool isInverse) {
+
+    auto _adj = &in->adj[projectLabel];
+    auto _reverse_adj = &in->reverse_adj[projectLabel];
+
+    if(!isInverse) {
+        adj_ptr = _adj;
+        reverse_adj_ptr = _reverse_adj;
+    } else {
+        adj_ptr = _reverse_adj;
+        reverse_adj_ptr = _adj;
+    }
 }
 
 void SimpleGraph::readFromContiguousFile(const std::string &fileName) {
 
+    std::fstream file(fileName, std::ios_base::in);
+
+    std::string graphStructure;
+    file >> graphStructure;
+
+    std::istringstream iss(graphStructure);
     std::string line;
-    std::ifstream graphFile { fileName };
-
-    std::regex edgePat (R"((\d+)\s(\d+)\s(\d+)\s\.)"); // subject predicate object .
-    std::regex headerPat (R"((\d+),(\d+),(\d+))"); // noNodes,noEdges,noLabels
-
-    // parse the header (1st line)
-    std::getline(graphFile, line);
-    std::smatch matches;
-    if(std::regex_search(line, matches, headerPat)) {
-        uint32_t noNodes = (uint32_t) std::stoul(matches[1]);
-        uint32_t noLabels = (uint32_t) std::stoul(matches[3]);
-
-        setNoVertices(noNodes);
-        setNoLabels(noLabels);
-    } else {
-        throw std::runtime_error(std::string("Invalid graph header!"));
-    }
-
-    // parse edge data
-    while(std::getline(graphFile, line)) {
-
-        if(std::regex_search(line, matches, edgePat)) {
-            uint32_t subject = (uint32_t) std::stoul(matches[1]);
-            uint32_t predicate = (uint32_t) std::stoul(matches[2]);
-            uint32_t object = (uint32_t) std::stoul(matches[3]);
-
-            addEdge(subject, object, predicate);
+    uint32_t noNodes = 0;
+    uint32_t noEdges = 0;
+    uint32_t noLabels = 0;
+    int j = 0;
+    while(std::getline(iss, line, ',')) {
+        if(j == 0) {
+            noNodes = (uint32_t) std::stoul(line);
+        }  else if(j == 1) {
+            noEdges = (uint32_t) std::stoul(line);
+        } else if(j == 2) {
+            noLabels = (uint32_t) std::stoul(line);
         }
+        j++;
     }
 
-    graphFile.close();
+    setNoLabels(noLabels);
+    setNoVertices(noNodes);
+    setDataStructureSizes();
 
+    for(int i = 0; i < noEdges; i++) {
+        uint32_t subject, predicate, object;
+
+        file >> subject >> predicate >> object;
+        file.ignore(INT32_MAX, '\n');
+
+        addEdge(subject, object, predicate);
+    }
+
+    file.close();
 }

@@ -31,14 +31,17 @@ cardStat SimpleEvaluator::computeStats(std::shared_ptr<SimpleGraph> &g) {
 
     cardStat stats {};
 
+    auto _adj = g->adj_ptr ? g->adj_ptr: &g->adj[0];
+    auto _reverse_adj = g->reverse_adj_ptr ? g->reverse_adj_ptr: &g->reverse_adj[0];
+
     for(int source = 0; source < g->getNoVertices(); source++) {
-        if(!g->adj[source].empty()) stats.noOut++;
+        if(!(*_adj)[source].empty()) stats.noOut++;
     }
 
     stats.noPaths = g->getNoDistinctEdges();
 
     for(int target = 0; target < g->getNoVertices(); target++) {
-        if(!g->reverse_adj[target].empty()) stats.noIn++;
+        if(!(*_reverse_adj)[target].empty()) stats.noIn++;
     }
 
     return stats;
@@ -47,33 +50,9 @@ cardStat SimpleEvaluator::computeStats(std::shared_ptr<SimpleGraph> &g) {
 std::shared_ptr<SimpleGraph> SimpleEvaluator::project(uint32_t projectLabel, bool inverse, std::shared_ptr<SimpleGraph> &in) {
 
     auto out = std::make_shared<SimpleGraph>(in->getNoVertices());
-    out->setNoLabels(in->getNoLabels());
 
-    if(!inverse) {
-        // going forward
-        for(uint32_t source = 0; source < in->getNoVertices(); source++) {
-            for (auto labelTarget : in->adj[source]) {
-
-                auto label = labelTarget.first;
-                auto target = labelTarget.second;
-
-                if (label == projectLabel)
-                    out->addEdge(source, target, label);
-            }
-        }
-    } else {
-        // going backward
-        for(uint32_t source = 0; source < in->getNoVertices(); source++) {
-            for (auto labelTarget : in->reverse_adj[source]) {
-
-                auto label = labelTarget.first;
-                auto target = labelTarget.second;
-
-                if (label == projectLabel)
-                    out->addEdge(source, target, label);
-            }
-        }
-    }
+    // Why loop here over all the data, while we can just extract the data in one sweep?
+    out->addEdges(in, projectLabel, inverse);
 
     return out;
 }
@@ -82,15 +61,17 @@ std::shared_ptr<SimpleGraph> SimpleEvaluator::join(std::shared_ptr<SimpleGraph> 
 
     auto out = std::make_shared<SimpleGraph>(left->getNoVertices());
     out->setNoLabels(1);
+    out->setDataStructureSizes();
+
+    auto leftMatrix = left->adj_ptr ? left->adj_ptr: &left->adj[0];
+    auto rightMatrix = right->adj_ptr ? right->adj_ptr: &right->adj[0];
 
     for(uint32_t leftSource = 0; leftSource < left->getNoVertices(); leftSource++) {
-        for (auto labelTarget : left->adj[leftSource]) {
+        for (auto leftTarget : (*leftMatrix)[leftSource]) {
 
-            int leftTarget = labelTarget.second;
             // try to join the left target with right source
-            for (auto rightLabelTarget : right->adj[leftTarget]) {
+            for (auto rightTarget : (*rightMatrix)[leftTarget]) {
 
-                auto rightTarget = rightLabelTarget.second;
                 out->addEdge(leftSource, rightTarget, 0);
 
             }
