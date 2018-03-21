@@ -29,7 +29,7 @@ protected:
 public:
 
     SimpleGraph() : V(0), L(0) {};
-    ~SimpleGraph() = default;
+    ~SimpleGraph();
     explicit SimpleGraph(uint32_t n);
 
     uint32_t getNoVertices() const override ;

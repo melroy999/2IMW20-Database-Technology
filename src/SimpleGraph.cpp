@@ -154,3 +154,14 @@ void SimpleGraph::readFromContiguousFile(const std::string &fileName) {
 
     file.close();
 }
+
+SimpleGraph::~SimpleGraph() {
+    // Dereference all the inner vectors.
+    for (auto &l : adj)
+        for(auto k : l)
+            delete k;
+
+    for (auto &l : reverse_adj)
+        for(auto k : l)
+            delete k;
+}
