@@ -31,7 +31,7 @@ uint32_t SimpleGraph::getNoEdges() const {
     uint32_t sum = 0;
     for (const auto &l : adj)
         for(const auto &v : l)
-            sum += v.size();
+            sum += v->size();
     return sum;
 }
 
@@ -41,17 +41,18 @@ uint32_t SimpleGraph::getNoDistinctEdges() const {
 
     if(adj_ptr) {
         for (auto sourceVec : *adj_ptr) {
+            if(sourceVec) {
+                std::sort(sourceVec->begin(), sourceVec->end());
 
-            std::sort(sourceVec.begin(), sourceVec.end());
+                uint32_t prevTarget = 0;
+                bool first = true;
 
-            uint32_t prevTarget = 0;
-            bool first = true;
-
-            for (const auto &target : sourceVec) {
-                if (first || prevTarget != target) {
-                    first = false;
-                    sum++;
-                    prevTarget = target;
+                for (const auto &target : *sourceVec) {
+                    if (first || prevTarget != target) {
+                        first = false;
+                        sum++;
+                        prevTarget = target;
+                    }
                 }
             }
         }
@@ -59,17 +60,18 @@ uint32_t SimpleGraph::getNoDistinctEdges() const {
 
     for (const auto &labelVec : adj) {
         for (auto sourceVec : labelVec) {
+            if(sourceVec) {
+                std::sort(sourceVec->begin(), sourceVec->end());
 
-            std::sort(sourceVec.begin(), sourceVec.end());
+                uint32_t prevTarget = 0;
+                bool first = true;
 
-            uint32_t prevTarget = 0;
-            bool first = true;
-
-            for (const auto &target : sourceVec) {
-                if (first || prevTarget != target) {
-                    first = false;
-                    sum++;
-                    prevTarget = target;
+                for (const auto &target : *sourceVec) {
+                    if (first || prevTarget != target) {
+                        first = false;
+                        sum++;
+                        prevTarget = target;
+                    }
                 }
             }
         }
@@ -92,8 +94,11 @@ void SimpleGraph::addEdge(uint32_t from, uint32_t to, uint32_t edgeLabel) {
                                          "(" + std::to_string(from) + "," + std::to_string(to) + "," +
                                          std::to_string(edgeLabel) + ")");
 
-    adj[edgeLabel][from].emplace_back(to);
-    reverse_adj[edgeLabel][to].emplace_back(from);
+    if(!adj[edgeLabel][from]) adj[edgeLabel][from] = new std::vector<uint32_t>();
+    if(!reverse_adj[edgeLabel][to]) reverse_adj[edgeLabel][to] = new std::vector<uint32_t>();
+
+    adj[edgeLabel][from]->emplace_back(to);
+    reverse_adj[edgeLabel][to]->emplace_back(from);
 }
 
 void SimpleGraph::addEdges(std::shared_ptr<SimpleGraph> &in, uint32_t projectLabel, bool isInverse) {

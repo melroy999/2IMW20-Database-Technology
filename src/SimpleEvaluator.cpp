@@ -33,13 +33,13 @@ cardStat SimpleEvaluator::computeStats(std::shared_ptr<SimpleGraph> &g) {
     auto _reverse_adj = g->reverse_adj_ptr ? g->reverse_adj_ptr: &g->reverse_adj[0];
 
     for(int source = 0; source < g->getNoVertices(); source++) {
-        if(!(*_adj)[source].empty()) stats.noOut++;
+        if((*_adj)[source] && !(*_adj)[source]->empty()) stats.noOut++;
     }
 
     stats.noPaths = g->getNoDistinctEdges();
 
     for(int target = 0; target < g->getNoVertices(); target++) {
-        if(!(*_reverse_adj)[target].empty()) stats.noIn++;
+        if((*_reverse_adj)[target] && !(*_reverse_adj)[target]->empty()) stats.noIn++;
     }
 
     return stats;
@@ -65,13 +65,17 @@ std::shared_ptr<SimpleGraph> SimpleEvaluator::join(std::shared_ptr<SimpleGraph> 
     auto rightMatrix = right->adj_ptr ? right->adj_ptr: &right->adj[0];
 
     for(uint32_t leftSource = 0; leftSource < left->getNoVertices(); leftSource++) {
-        for (auto leftTarget : (*leftMatrix)[leftSource]) {
+        if((*leftMatrix)[leftSource]) {
+            for (auto leftTarget : *(*leftMatrix)[leftSource]) {
 
-            // try to join the left target with right source
-            for (auto rightTarget : (*rightMatrix)[leftTarget]) {
+                // try to join the left target with right source
+                if((*rightMatrix)[leftTarget]) {
+                    for (auto rightTarget : *(*rightMatrix)[leftTarget]) {
 
-                out->addEdge(leftSource, rightTarget, 0);
+                        out->addEdge(leftSource, rightTarget, 0);
 
+                    }
+                }
             }
         }
     }

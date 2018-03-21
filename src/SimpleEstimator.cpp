@@ -57,45 +57,51 @@ void SimpleEstimator::prepare() {
 
     for(uint32_t label = 0; label < graph->getNoLabels(); label++) {
         for (uint32_t vertex = 0; vertex < graph->getNoVertices(); vertex++) {
-            // Presort both the adjacency and reverse adjacency graphs.
-            std::sort(graph->adj[label][vertex].begin(), graph->adj[label][vertex].end());
-            std::sort(graph->reverse_adj[label][vertex].begin(), graph->reverse_adj[label][vertex].end());
+            if(graph->adj[label][vertex]) {
+                // Presort the adjacency list.
+                std::sort(graph->adj[label][vertex]->begin(), graph->adj[label][vertex]->end());
 
-            // Filter out duplicates.
-            uint32_t prevTarget = 0;
-            bool first = true;
-            uint32_t degreeCount = 0;
+                // Filter out duplicates.
+                uint32_t prevTarget = 0;
+                bool first = true;
+                uint32_t degreeCount = 0;
 
-            for (const auto &target : graph->adj[label][vertex]) {
-                if (first || prevTarget != target) {
+                for (const auto &target : *graph->adj[label][vertex]) {
+                    if (first || prevTarget != target) {
 
-                    labelData[label].insertEdge(vertex, target);
+                        labelData[label].insertEdge(vertex, target);
 
-                    first = false;
-                    prevTarget = target;
-                    degreeCount++;
+                        first = false;
+                        prevTarget = target;
+                        degreeCount++;
+                    }
                 }
+
+                // Count which vertices have an out degree of one with respect to the current label.
+                if (degreeCount == 1) labelData[label].incrementSourceOut1();
             }
 
-            // Count which vertices have an out degree of one with respect to the current label.
-            if (degreeCount == 1) labelData[label].incrementSourceOut1();
+            if(graph->reverse_adj[label][vertex]) {
+                // Presort the reverse adjacency list.
+                std::sort(graph->reverse_adj[label][vertex]->begin(), graph->reverse_adj[label][vertex]->end());
 
-            // Filter out duplicates.
-            prevTarget = 0;
-            first = true;
-            degreeCount = 0;
+                // Filter out duplicates.
+                uint32_t prevTarget = 0;
+                bool first = true;
+                uint32_t degreeCount = 0;
 
-            for (const auto &source : graph->reverse_adj[label][vertex]) {
-                if (first || prevTarget != source) {
+                for (const auto &source : *graph->reverse_adj[label][vertex]) {
+                    if (first || prevTarget != source) {
 
-                    first = false;
-                    prevTarget = source;
-                    degreeCount++;
+                        first = false;
+                        prevTarget = source;
+                        degreeCount++;
+                    }
                 }
-            }
 
-            // Count which vertices have an in degree of one with respect to the current label.
-            if (degreeCount == 1) labelData[label].incrementTargetIn1();
+                // Count which vertices have an in degree of one with respect to the current label.
+                if (degreeCount == 1) labelData[label].incrementTargetIn1();
+            }
         }
     }
 
@@ -138,8 +144,8 @@ void SimpleEstimator::prepare() {
                                 bool first = true;
 
                                 for(const auto &target : w.source < graph->getNoLabels() ?
-                                                       graph->reverse_adj[w.source % graph->getNoLabels()][i * 64 + j] :
-                                                       graph->adj[w.source % graph->getNoLabels()][i * 64 + j])
+                                                       *graph->reverse_adj[w.source % graph->getNoLabels()][i * 64 + j] :
+                                                       *graph->adj[w.source % graph->getNoLabels()][i * 64 + j])
                                 {
                                     if (first || prevTarget != target) {
                                         w.sourceNodes[target / 64] |= SET_BIT(target);
@@ -156,8 +162,8 @@ void SimpleEstimator::prepare() {
 
                                 int targets = 0;
                                 for(const auto &target : w.target < graph->getNoLabels() ?
-                                                       graph->adj[w.target % graph->getNoLabels()][i * 64 + j] :
-                                                       graph->reverse_adj[w.target % graph->getNoLabels()][i * 64 + j])
+                                                       *graph->adj[w.target % graph->getNoLabels()][i * 64 + j] :
+                                                       *graph->reverse_adj[w.target % graph->getNoLabels()][i * 64 + j])
                                 {
                                     if (first || prevTarget != target) {
                                         w.targetNodes[target / 64] |= SET_BIT(target);

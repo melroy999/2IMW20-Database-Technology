@@ -15,12 +15,12 @@
 
 class SimpleGraph : public Graph {
 public:
-    std::vector<std::vector<std::vector<uint32_t>>> adj;
-    std::vector<std::vector<std::vector<uint32_t>>> reverse_adj;
+    std::vector<std::vector<std::vector<uint32_t>*>> adj;
+    std::vector<std::vector<std::vector<uint32_t>*>> reverse_adj;
 
     // Pointers to vectors in another vector, used to speed up certain operations.
-    std::vector<std::vector<uint32_t>> *adj_ptr = nullptr;
-    std::vector<std::vector<uint32_t>> *reverse_adj_ptr = nullptr;
+    std::vector<std::vector<uint32_t>*> *adj_ptr = nullptr;
+    std::vector<std::vector<uint32_t>*> *reverse_adj_ptr = nullptr;
 
 protected:
     uint32_t V;
