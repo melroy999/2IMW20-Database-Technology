@@ -39,6 +39,24 @@ uint32_t SimpleGraph::getNoDistinctEdges() const {
 
     uint32_t sum = 0;
 
+    if(adj_ptr) {
+        for (auto sourceVec : *adj_ptr) {
+
+            std::sort(sourceVec.begin(), sourceVec.end());
+
+            uint32_t prevTarget = 0;
+            bool first = true;
+
+            for (const auto &target : sourceVec) {
+                if (first || prevTarget != target) {
+                    first = false;
+                    sum++;
+                    prevTarget = target;
+                }
+            }
+        }
+    }
+
     for (const auto &labelVec : adj) {
         for (auto sourceVec : labelVec) {
 
