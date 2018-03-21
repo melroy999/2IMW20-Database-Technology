@@ -112,16 +112,21 @@ void SimpleGraph::addEdges(std::shared_ptr<SimpleGraph> &in, uint32_t projectLab
 
 void SimpleGraph::readFromContiguousFile(const std::string &fileName) {
 
-    std::string line;
     std::ifstream graphFile { fileName };
 
-    std::regex edgePat (R"((\d+)\s(\d+)\s(\d+)\s\.)"); // subject predicate object .
-    std::regex headerPat (R"((\d+),(\d+),(\d+))"); // noNodes,noEdges,noLabels
+    // Split on spaces.
+    std::istream_iterator<std::string> beg(graphFile), end;
+    std::vector<std::string> tokens(beg, end); // done!
 
-    // parse the header (1st line)
-    std::getline(graphFile, line);
+    // Parse the data.
+    std::regex headerPat (R"((\d+),(\d+),(\d+))"); // noNodes,noEdges,noLabels
     std::smatch matches;
-    if(std::regex_search(line, matches, headerPat)) {
+
+    if(tokens.empty()) {
+        throw std::runtime_error(std::string("Could not find graph file!"));
+    }
+
+    if(std::regex_search(tokens.front(), matches, headerPat)) {
         uint32_t noNodes = (uint32_t) std::stoul(matches[1]);
         uint32_t noLabels = (uint32_t) std::stoul(matches[3]);
 
@@ -132,18 +137,13 @@ void SimpleGraph::readFromContiguousFile(const std::string &fileName) {
         throw std::runtime_error(std::string("Invalid graph header!"));
     }
 
-    // parse edge data
-    while(std::getline(graphFile, line)) {
+    for(uint32_t i = 1; i < tokens.size(); i += 4) {
+        auto subject = (uint32_t) std::stoul(tokens[i]);
+        auto predicate = (uint32_t) std::stoul(tokens[i + 1]);
+        auto object = (uint32_t) std::stoul(tokens[i + 2]);
 
-        if(std::regex_search(line, matches, edgePat)) {
-            uint32_t subject = (uint32_t) std::stoul(matches[1]);
-            uint32_t predicate = (uint32_t) std::stoul(matches[2]);
-            uint32_t object = (uint32_t) std::stoul(matches[3]);
-
-            addEdge(subject, object, predicate);
-        }
+        addEdge(subject, object, predicate);
     }
 
     graphFile.close();
-
 }
