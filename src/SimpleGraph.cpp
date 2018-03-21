@@ -112,38 +112,40 @@ void SimpleGraph::addEdges(std::shared_ptr<SimpleGraph> &in, uint32_t projectLab
 
 void SimpleGraph::readFromContiguousFile(const std::string &fileName) {
 
-    std::ifstream graphFile { fileName };
+    std::fstream file(fileName, std::ios_base::in);
 
-    // Split on spaces.
-    std::istream_iterator<std::string> beg(graphFile), end;
-    std::vector<std::string> tokens(beg, end); // done!
+    std::string graphStructure;
+    file >> graphStructure;
 
-    // Parse the data.
-    std::regex headerPat (R"((\d+),(\d+),(\d+))"); // noNodes,noEdges,noLabels
-    std::smatch matches;
-
-    if(tokens.empty()) {
-        throw std::runtime_error(std::string("Could not find graph file!"));
+    std::istringstream iss(graphStructure);
+    std::string line;
+    uint32_t noNodes = 0;
+    uint32_t noEdges = 0;
+    uint32_t noLabels = 0;
+    int j = 0;
+    while(std::getline(iss, line, ',')) {
+        if(j == 0) {
+            noNodes = (uint32_t) std::stoul(line);
+        }  else if(j == 1) {
+            noEdges = (uint32_t) std::stoul(line);
+        } else if(j == 2) {
+            noLabels = (uint32_t) std::stoul(line);
+        }
+        j++;
     }
 
-    if(std::regex_search(tokens.front(), matches, headerPat)) {
-        uint32_t noNodes = (uint32_t) std::stoul(matches[1]);
-        uint32_t noLabels = (uint32_t) std::stoul(matches[3]);
+    setNoLabels(noLabels);
+    setNoVertices(noNodes);
+    setDataStructureSizes();
 
-        setNoLabels(noLabels);
-        setNoVertices(noNodes);
-        setDataStructureSizes();
-    } else {
-        throw std::runtime_error(std::string("Invalid graph header!"));
-    }
+    for(int i = 0; i < noEdges; i++) {
+        uint32_t subject, predicate, object;
 
-    for(uint32_t i = 1; i < tokens.size(); i += 4) {
-        auto subject = (uint32_t) std::stoul(tokens[i]);
-        auto predicate = (uint32_t) std::stoul(tokens[i + 1]);
-        auto object = (uint32_t) std::stoul(tokens[i + 2]);
+        file >> subject >> predicate >> object;
+        file.ignore(INT32_MAX, '\n');
 
         addEdge(subject, object, predicate);
     }
 
-    graphFile.close();
+    file.close();
 }
