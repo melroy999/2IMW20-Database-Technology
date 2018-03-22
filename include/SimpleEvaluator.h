@@ -18,6 +18,8 @@ class SimpleEvaluator : public Evaluator {
     std::shared_ptr<SimpleGraph> graph;
     std::shared_ptr<SimpleEstimator> est;
     std::map<std::string, uint32_t> estCache;
+    std::map<std::string, cardStat> finalCache;
+    std::map<std::string, std::shared_ptr<SimpleGraph>> resultsCache;
 
 public:
 
@@ -32,6 +34,7 @@ public:
     std::shared_ptr<SimpleGraph> evaluate_aux(RPQTree *q);
     RPQTree * rewrite_query_tree(RPQTree *q);
     std::vector<std::string> get_query_graph(RPQTree *q, std::vector<std::string> nodes);
+    std::string get_query_as_string(RPQTree *q);
     static std::shared_ptr<SimpleGraph> project(uint32_t label, bool inverse, std::shared_ptr<SimpleGraph> &g);
     static std::shared_ptr<SimpleGraph> join(std::shared_ptr<SimpleGraph> &left, std::shared_ptr<SimpleGraph> &right);
 

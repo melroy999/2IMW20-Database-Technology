@@ -5,8 +5,6 @@
 #include "SimpleEstimator.h"
 #include "SimpleEvaluator.h"
 
-#include <regex>
-
 SimpleEvaluator::SimpleEvaluator(std::shared_ptr<SimpleGraph> &g) {
 
     // works only with SimpleGraph
@@ -111,13 +109,24 @@ std::shared_ptr<SimpleGraph> SimpleEvaluator::evaluate_aux(RPQTree *q) {
 
     if(q->isConcat()) {
 
+        std::string queryString = get_query_as_string(q);
+
+        if(resultsCache.find(queryString) != resultsCache.end()){
+
+            return resultsCache[queryString];
+        }
+
         // evaluate the children
         auto leftGraph = SimpleEvaluator::evaluate_aux(q->left);
         auto rightGraph = SimpleEvaluator::evaluate_aux(q->right);
 
         // join left with right
-        return SimpleEvaluator::join(leftGraph, rightGraph);
 
+        std::shared_ptr<SimpleGraph> result = SimpleEvaluator::join(leftGraph, rightGraph);
+
+        resultsCache.insert(std::make_pair(queryString, result));
+
+        return result;
     }
 
     return nullptr;
@@ -147,6 +156,29 @@ std::vector<std::string> SimpleEvaluator::get_query_graph(RPQTree *q, std::vecto
     }
 
     return nodes;
+}
+
+
+/**
+ * Get a query tree as a string
+ * @param q
+ * @return
+ */
+std::string SimpleEvaluator::get_query_as_string(RPQTree *q) {
+
+    if(q->isLeaf()) {
+
+        return q->data;
+    }
+
+    if(q->isConcat()) {
+
+        std::string leftNodes = SimpleEvaluator::get_query_as_string(q->left);
+        std::string rightNodes = SimpleEvaluator::get_query_as_string(q->right);
+        return "(" + leftNodes + "/" + rightNodes +")";
+    }
+
+    return "";
 }
 
 /**
@@ -203,11 +235,22 @@ RPQTree * SimpleEvaluator::rewrite_query_tree(RPQTree *query) {
 
 cardStat SimpleEvaluator::evaluate(RPQTree *query) {
 
+    std::string queryString = get_query_as_string(query);
+
+    if(finalCache.find(queryString) != finalCache.end()){
+
+        return finalCache[queryString];
+    }
+
     if(est){
 
         query = rewrite_query_tree(query);
     }
 
     auto res = evaluate_aux(query);
-    return SimpleEvaluator::computeStats(res);
+    auto stats = SimpleEvaluator::computeStats(res);
+
+    finalCache.insert(std::make_pair(queryString, stats));
+
+    return stats;
 }
