@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <cmath>
 #include <memory>
+#include <regex>
 #include "Graph.h"
 
 #define CHECK_BIT(var,pos) ((var) & (1ULL<<(pos)))
