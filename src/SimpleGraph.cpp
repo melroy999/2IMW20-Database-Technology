@@ -2,25 +2,24 @@
 // Created by Nikolay Yakovets on 2018-01-31.
 //
 
+#include <sstream>
 #include "SimpleGraph.h"
 
-SimpleGraph::SimpleGraph(uint32_t n)   {
+SimpleGraph::SimpleGraph(uint32_t n, uint32_t l)   {
     setNoVertices(n);
+    setNoLabels(l);
+    setDataStructureSizes();
+    sources = std::vector<uint64_t>(static_cast<unsigned long>(std::ceil((double) n / 64)));
+    targets = std::vector<uint64_t>(static_cast<unsigned long>(std::ceil((double) n / 64)));
+}
+
+SimpleGraph::SimpleGraph(const std::shared_ptr<SimpleGraph> &g, uint32_t l) {
+    tree = &g->trees[l];
+    setNoVertices(g->getNoVertices());
 }
 
 uint32_t SimpleGraph::getNoVertices() const {
     return V;
-}
-
-void SimpleGraph::setDataStructureSizes() {
-    adj.resize(getNoLabels());
-    reverse_adj.resize(getNoLabels());
-
-    for (auto &l : adj)
-        l.resize(V);
-
-    for (auto &l : reverse_adj)
-        l.resize(V);
 }
 
 void SimpleGraph::setNoVertices(uint32_t n) {
@@ -28,54 +27,11 @@ void SimpleGraph::setNoVertices(uint32_t n) {
 }
 
 uint32_t SimpleGraph::getNoEdges() const {
-    uint32_t sum = 0;
-    for (const auto &l : adj)
-        for(const auto &v : l)
-            sum += v.size();
-    return sum;
+    return tree ? tree->getNoEdges() : E;
 }
 
 uint32_t SimpleGraph::getNoDistinctEdges() const {
-
-    uint32_t sum = 0;
-
-    if(adj_ptr) {
-        for (auto sourceVec : *adj_ptr) {
-
-            std::sort(sourceVec.begin(), sourceVec.end());
-
-            uint32_t prevTarget = 0;
-            bool first = true;
-
-            for (const auto &target : sourceVec) {
-                if (first || prevTarget != target) {
-                    first = false;
-                    sum++;
-                    prevTarget = target;
-                }
-            }
-        }
-    }
-
-    for (const auto &labelVec : adj) {
-        for (auto sourceVec : labelVec) {
-
-            std::sort(sourceVec.begin(), sourceVec.end());
-
-            uint32_t prevTarget = 0;
-            bool first = true;
-
-            for (const auto &target : sourceVec) {
-                if (first || prevTarget != target) {
-                    first = false;
-                    sum++;
-                    prevTarget = target;
-                }
-            }
-        }
-    }
-
-    return sum;
+    return tree ? tree->getNoEdges() : E;
 }
 
 uint32_t SimpleGraph::getNoLabels() const {
@@ -86,28 +42,17 @@ void SimpleGraph::setNoLabels(uint32_t noLabels) {
     L = noLabels;
 }
 
+void SimpleGraph::setDataStructureSizes() {
+    trees.resize(L, K2Tree(V));
+}
+
 void SimpleGraph::addEdge(uint32_t from, uint32_t to, uint32_t edgeLabel) {
     if(from >= V || to >= V || edgeLabel >= L)
         throw std::runtime_error(std::string("Edge data out of bounds: ") +
                                          "(" + std::to_string(from) + "," + std::to_string(to) + "," +
                                          std::to_string(edgeLabel) + ")");
 
-    adj[edgeLabel][from].emplace_back(to);
-    reverse_adj[edgeLabel][to].emplace_back(from);
-}
-
-void SimpleGraph::addEdges(std::shared_ptr<SimpleGraph> &in, uint32_t projectLabel, bool isInverse) {
-
-    auto _adj = &in->adj[projectLabel];
-    auto _reverse_adj = &in->reverse_adj[projectLabel];
-
-    if(!isInverse) {
-        adj_ptr = _adj;
-        reverse_adj_ptr = _reverse_adj;
-    } else {
-        adj_ptr = _reverse_adj;
-        reverse_adj_ptr = _adj;
-    }
+    trees[edgeLabel].addEdge(from, to);
 }
 
 void SimpleGraph::readFromContiguousFile(const std::string &fileName) {
@@ -147,5 +92,50 @@ void SimpleGraph::readFromContiguousFile(const std::string &fileName) {
         addEdge(subject, object, predicate);
     }
 
+    sources = std::vector<uint64_t>(static_cast<unsigned long>(std::ceil((double) noNodes / 64)));
+    targets = std::vector<uint64_t>(static_cast<unsigned long>(std::ceil((double) noNodes / 64)));
+    finalizeTree();
+
     file.close();
 }
+
+void SimpleGraph::finalizeTree() {
+    // Calculate the number of edges, sources and target vertices.
+    E = 0;
+    for(auto &tree : trees) {
+        tree.finalizeTree();
+        E += tree.getNoEdges();
+
+        doOrIP(&sources, &tree.getSources());
+        doOrIP(&targets, &tree.getTargets());
+    }
+
+    S = popcountVector(&sources);
+    T = popcountVector(&targets);
+}
+
+uint32_t SimpleGraph::getNoSources() const {
+    if(inverse) {
+        return tree ? tree->getNoTargets() : T;
+    } else {
+        return tree ? tree->getNoSources() : S;
+    }
+}
+
+uint32_t SimpleGraph::getNoTargets() const {
+    if(inverse) {
+        return tree ? tree->getNoSources() : S;
+    } else {
+        return tree ? tree->getNoTargets() : T;
+    }
+}
+
+const std::vector<uint64_t> &SimpleGraph::getSources() const {
+    return tree ? tree->getSources() : sources;
+}
+
+const std::vector<uint64_t> &SimpleGraph::getTargets() const {
+    return tree ? tree->getTargets() : targets;
+}
+
+

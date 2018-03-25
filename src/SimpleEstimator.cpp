@@ -13,29 +13,6 @@ SimpleEstimator::SimpleEstimator(std::shared_ptr<SimpleGraph> &g){
     graph = g;
 }
 
-uint32_t SimpleEstimator::countBitsSet(std::vector<uint64_t>* result) {
-    uint32_t sum = 0;
-    for(auto v : *result) {
-        if(v == 0) continue;
-        sum += __builtin_popcountll(v);
-    }
-    return sum;
-}
-
-std::vector<uint64_t> SimpleEstimator::doAnd(const std::vector<uint64_t> *t, const std::vector<uint64_t> *s) {
-
-    // If the sizes do not correspond, return an empty join.
-    std::vector<uint64_t> result(t->size());
-    if(t->size() != s->size()) {
-        return result;
-    }
-
-    for(unsigned long i = t->size() ; i -- > 0 ; ) {
-        result[i] = (*t)[i] & (*s)[i];
-    }
-    return result;
-}
-
 void SimpleEstimator::prepare() {
 
     // The number of bits we need to store all the vertices.
@@ -50,57 +27,12 @@ void SimpleEstimator::prepare() {
         labelData.emplace_back(i, i % graph->getNoLabels(), i >= graph->getNoLabels(), noBins);
     }
 
-    // Do this outside of the loop, as it somehow dereferences pointers if we don't.
+    // Set the twin, and the tree references.
     for(uint32_t i = 0; i < graph->getNoLabels(); i++) {
         labelData[i + graph->getNoLabels()].setTwin(&labelData[i]);
-    }
 
-    for(uint32_t label = 0; label < graph->getNoLabels(); label++) {
-        for (uint32_t vertex = 0; vertex < graph->getNoVertices(); vertex++) {
-            // Presort both the adjacency and reverse adjacency graphs.
-            std::sort(graph->adj[label][vertex].begin(), graph->adj[label][vertex].end());
-            std::sort(graph->reverse_adj[label][vertex].begin(), graph->reverse_adj[label][vertex].end());
-
-            // Filter out duplicates.
-            uint32_t prevTarget = 0;
-            bool first = true;
-            uint32_t degreeCount = 0;
-
-            for (const auto &target : graph->adj[label][vertex]) {
-                if (first || prevTarget != target) {
-
-                    labelData[label].insertEdge(vertex, target);
-
-                    first = false;
-                    prevTarget = target;
-                    degreeCount++;
-                }
-            }
-
-            // Count which vertices have an out degree of one with respect to the current label.
-            if (degreeCount == 1) labelData[label].incrementSourceOut1();
-
-            // Filter out duplicates.
-            prevTarget = 0;
-            first = true;
-            degreeCount = 0;
-
-            for (const auto &source : graph->reverse_adj[label][vertex]) {
-                if (first || prevTarget != source) {
-
-                    first = false;
-                    prevTarget = source;
-                    degreeCount++;
-                }
-            }
-
-            // Count which vertices have an in degree of one with respect to the current label.
-            if (degreeCount == 1) labelData[label].incrementTargetIn1();
-        }
-    }
-
-    for(uint32_t i = 0; i < graph->getNoLabels(); i++) {
-        labelData[i].calculateSize();
+        // All joinstat information can essentially be found in the tree...
+        labelData[i].setTree(&graph->trees[i]);
     }
 
     // Find all the join information.
@@ -121,6 +53,12 @@ void SimpleEstimator::prepare() {
             // We dont want to waste time on joins without any edges.
             if(w.numCommonNodes != 0) {
 
+                // Which KTrees do we take the data from?
+                K2Tree *leftKTree = &graph->trees[w.source % graph->getNoLabels()];
+                K2Tree *rightKTree = &graph->trees[w.target % graph->getNoLabels()];
+                bool leftInverse = w.source / graph->getNoLabels() == 1;
+                bool rightInverse = w.target / graph->getNoLabels() == 1;
+
                 // Change the bucket size of the source and target collections to fit all the vertices.
                 w.changeBucketSize(noBins);
 
@@ -131,42 +69,21 @@ void SimpleEstimator::prepare() {
                         for(uint32_t j = 0; j < 64; j++) {
                             if(CHECK_BIT(bucket, j)) {
 
-                                int sources = 0;
+                                // Gather the left and right nodes connected to the common node.
+                                auto leftSources = leftInverse ? leftKTree->getDirect(64 * i + j) : leftKTree->getReverse(64 * i + j);
+                                auto rightTargets = rightInverse ? rightKTree->getReverse(64 * i + j) : rightKTree->getDirect(64 * i + j);
 
-                                // Filter out duplicates.
-                                uint32_t prevTarget = 0;
-                                bool first = true;
+                                auto sources = leftSources.size();
+                                auto targets = rightTargets.size();
+                                w.numSourceEdges += sources;
+                                w.numTargetEdges += targets;
 
-                                for(const auto &target : w.source < graph->getNoLabels() ?
-                                                       graph->reverse_adj[w.source % graph->getNoLabels()][i * 64 + j] :
-                                                       graph->adj[w.source % graph->getNoLabels()][i * 64 + j])
-                                {
-                                    if (first || prevTarget != target) {
-                                        w.sourceNodes[target / 64] |= SET_BIT(target);
-                                        sources++;
-                                        w.numSourceEdges++;
-
-                                        first = false;
-                                        prevTarget = target;
-                                    }
+                                for(auto s : leftSources) {
+                                    w.sourceNodes[s / 64] |= SET_BIT(s);
                                 }
 
-                                prevTarget = 0;
-                                first = true;
-
-                                int targets = 0;
-                                for(const auto &target : w.target < graph->getNoLabels() ?
-                                                       graph->adj[w.target % graph->getNoLabels()][i * 64 + j] :
-                                                       graph->reverse_adj[w.target % graph->getNoLabels()][i * 64 + j])
-                                {
-                                    if (first || prevTarget != target) {
-                                        w.targetNodes[target / 64] |= SET_BIT(target);
-                                        targets++;
-                                        w.numTargetEdges++;
-
-                                        first = false;
-                                        prevTarget = target;
-                                    }
+                                for(auto t : rightTargets) {
+                                    w.targetNodes[t / 64] |= SET_BIT(t);
                                 }
 
                                 paths += sources * targets;
@@ -177,8 +94,8 @@ void SimpleEstimator::prepare() {
             }
 
             w.numPaths = paths;
-            w.numSourceNodes = countBitsSet(&w.sourceNodes);
-            w.numTargetNodes = countBitsSet(&w.targetNodes);
+            w.numSourceNodes = popcountVector(&w.sourceNodes);
+            w.numTargetNodes = popcountVector(&w.targetNodes);
         }
     }
 }
@@ -204,9 +121,9 @@ exCardStat SimpleEstimator::estimateLeafNode(RPQTree *q) {
 
     // Report the result.
     exCardStat result = exCardStat {
-            static_cast<double>(labelData[label].getNumSources()),
+            static_cast<double>(labelData[label].getNoSources()),
             static_cast<double>(labelData[label].getNumEdges()),
-            static_cast<double>(labelData[label].getNumTargets())
+            static_cast<double>(labelData[label].getNoTargets())
     };
     result.vertices.push_back(label);
 
@@ -266,8 +183,8 @@ void estimateInAndOutCardinality(exCardStat* leftStat, exCardStat* rightStat, la
 
     // So, what is the expected number of source and target vertices given the above probabilities?
     // Here we do not simply subtract, as we would risk getting negative numbers.
-    *noOut = leftStat->noOut * (1 - (pSourceRemove * terminatedEdges) / leftData->getNumSources());
-    *noIn = rightStat->noIn * (1 - (pTargetRemove * initializedEdges) / rightData->getNumTargets());
+    *noOut = leftStat->noOut * (1 - (pSourceRemove * terminatedEdges) / leftData->getNoSources());
+    *noIn = rightStat->noIn * (1 - (pTargetRemove * initializedEdges) / rightData->getNoTargets());
 }
 
 /**
@@ -315,7 +232,7 @@ exCardStat SimpleEstimator::estimateJoin(exCardStat *leftStat, exCardStat *right
 
     if(abs(leftStat->vertices.back() - rightStat->vertices.front()) == graph -> getNoLabels()) {
         // We know that at least the number of edges minus the number of source nodes are duplicates.
-        unsigned long minimumDuplicateCount = leftData->getNumEdges() - leftData->getNumSources();
+        unsigned long minimumDuplicateCount = leftData->getNumEdges() - leftData->getNoSources();
         noPaths -= minimumDuplicateCount;
     }
 

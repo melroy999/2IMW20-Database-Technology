@@ -31,52 +31,82 @@ cardStat SimpleEvaluator::computeStats(std::shared_ptr<SimpleGraph> &g) {
 
     cardStat stats {};
 
-    auto _adj = g->adj_ptr ? g->adj_ptr: &g->adj[0];
-    auto _reverse_adj = g->reverse_adj_ptr ? g->reverse_adj_ptr: &g->reverse_adj[0];
-
-    for(int source = 0; source < g->getNoVertices(); source++) {
-        if(!(*_adj)[source].empty()) stats.noOut++;
-    }
-
-    stats.noPaths = g->getNoDistinctEdges();
-
-    for(int target = 0; target < g->getNoVertices(); target++) {
-        if(!(*_reverse_adj)[target].empty()) stats.noIn++;
-    }
+    stats.noOut = g->getNoSources();
+    stats.noPaths = g->getNoEdges();
+    stats.noIn = g->getNoTargets();
 
     return stats;
 }
 
 std::shared_ptr<SimpleGraph> SimpleEvaluator::project(uint32_t projectLabel, bool inverse, std::shared_ptr<SimpleGraph> &in) {
-
-    auto out = std::make_shared<SimpleGraph>(in->getNoVertices());
-
-    // Why loop here over all the data, while we can just extract the data in one sweep?
-    out->addEdges(in, projectLabel, inverse);
-
-    return out;
+    auto graph = std::make_shared<SimpleGraph>(in, projectLabel);
+    graph->inverse = inverse;
+    return graph;
 }
 
 std::shared_ptr<SimpleGraph> SimpleEvaluator::join(std::shared_ptr<SimpleGraph> &left, std::shared_ptr<SimpleGraph> &right) {
 
-    auto out = std::make_shared<SimpleGraph>(left->getNoVertices());
-    out->setNoLabels(1);
-    out->setDataStructureSizes();
+    auto out = std::make_shared<SimpleGraph>(left->getNoVertices(), 1);
 
-    auto leftMatrix = left->adj_ptr ? left->adj_ptr: &left->adj[0];
-    auto rightMatrix = right->adj_ptr ? right->adj_ptr: &right->adj[0];
+    // Which KTrees do we take the data from? Either the pointer, or the first.
+    K2Tree *leftKTree = left->tree ? left->tree : &left->trees.front();
+    K2Tree *rightKTree = right->tree ? right->tree : &right->trees.front();
 
-    for(uint32_t leftSource = 0; leftSource < left->getNoVertices(); leftSource++) {
-        for (auto leftTarget : (*leftMatrix)[leftSource]) {
+    // TODO Compare this version to the common nodes variant.
+//    for(uint32_t s = 0; s < left->getNoVertices(); s++) {
+//        // Check if the source is present, invert when necessary.
+//        if(left->inverse ? leftKTree->isTargetPresent(s) : leftKTree->isSourcePresent(s)) {
+//            // Find the targets.
+//            auto leftTargets = left->inverse ? leftKTree->getReverse(s) : leftKTree->getDirect(s);
+//
+//            for(auto c : leftTargets) {
+//                // Do the same checks as before.
+//                if(right->inverse ? rightKTree->isTargetPresent(c) : rightKTree->isSourcePresent(c)) {
+//                    // Find the targets.
+//                    auto rightTargets = right->inverse ? rightKTree->getReverse(c) : rightKTree->getDirect(c);
+//
+//                    for(auto t : rightTargets) {
+//                        out->addEdge(s, t, 0);
+//                    }
+//                }
+//            }
+//        }
+//    }
 
-            // try to join the left target with right source
-            for (auto rightTarget : (*rightMatrix)[leftTarget]) {
 
-                out->addEdge(leftSource, rightTarget, 0);
+    // TODO make alternative implementations, where we choose the starting point with the least amount of nodes.
+    // TODO this way, we can skip a lot of searching.
+    // Check which nodes the two trees will have in common.
+    const std::vector<uint64_t>* sourceTargets = left->inverse ? &leftKTree->getSources() : &leftKTree->getTargets();
+    const std::vector<uint64_t>* targetSources = right->inverse ? &rightKTree->getTargets() : &rightKTree->getSources();
+    auto commonNodes = doAnd(sourceTargets, targetSources);
 
+    for(uint32_t i = 0; i < commonNodes.size(); i++) {
+        auto bucket = commonNodes[i];
+
+        // There are no joins if the bucket has the value zero, so skip as an optimization.
+        if(bucket != 0ULL) {
+            for(uint32_t j = 0; j < 64; j++) {
+                if(CHECK_BIT(bucket, j)) {
+                    // Gather the left and right nodes connected to the common node.
+                    auto leftSources = left->inverse ? leftKTree->getDirect(64 * i + j) : leftKTree->getReverse(64 * i + j);
+                    auto rightTargets = right->inverse ? rightKTree->getReverse(64 * i + j) : rightKTree->getDirect(64 * i + j);
+
+                    // Gather each combination of edges.
+                    for(auto s : leftSources) {
+                        for(auto t : rightTargets) {
+
+                            // TODO wait a moment, are s and t currently in the join?
+                            out->addEdge(s, t, 0);
+                        }
+                    }
+                }
             }
         }
     }
+
+    // Finalize the join.
+    out->finalizeTree();
 
     return out;
 }

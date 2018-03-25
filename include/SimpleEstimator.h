@@ -46,12 +46,6 @@ public:
     cardStat estimate(RPQTree *q) override ;
     exCardStat doEstimation(RPQTree *q);
 
-    static std::vector<uint64_t> doAnd(const std::vector<uint64_t> *t, const std::vector<uint64_t> *s);
-
-    static uint32_t countBitsSet(std::vector<uint64_t> *result);
-
-    static bool sortEdges(const std::pair<uint32_t, uint32_t> &a, const std::pair<uint32_t, uint32_t> &b);
-
     exCardStat estimateLeafNode(RPQTree *q);
 
     exCardStat estimateSimpleJoin(exCardStat *leftStat, exCardStat *rightStat);
@@ -73,18 +67,9 @@ struct labelStat {
 
 private:
 
-    // The number of unique edges that use this label.
-    uint32_t numEdges{};
-
-    // The sources and targets of the label, encoded as a bit collection.
-    std::vector<uint64_t> sources;
-    std::vector<uint64_t> targets;
-    uint32_t numSources{};
-    uint32_t numTargets{};
-
-    // The number of sources of the labelStat with source out degree 1 and target out degree 1.
-    uint32_t sourceOut1{};
-    uint32_t targetIn1{};
+    // A reference to the appropriate KTree.
+    // It contains the sources, targets, number of sources and number of targets, and the number of edges.
+    K2Tree* tree{};
 
 public:
 
@@ -95,8 +80,6 @@ public:
         labelStat::uid = uid;
         labelStat::id = id;
         labelStat::isInverse = isInverse;
-        sources = std::vector<uint64_t>(noBins);
-        targets = std::vector<uint64_t>(noBins);
     }
 
     void setTwin(labelStat* twin) {
@@ -104,42 +87,21 @@ public:
         twin->twin = this;
     }
 
-    const std::vector<uint64_t> &getSources() const { return isInverse ? twin -> getTargets() : sources; }
-    const std::vector<uint64_t> &getTargets() const { return isInverse ? twin -> getSources() : targets; }
-    const uint32_t getNumSources() const { return isInverse ? twin -> getNumTargets() : numSources; }
-    const uint32_t getNumTargets() const { return isInverse ? twin -> getNumSources() : numTargets; }
-    const uint32_t getNumEdges() const { return isInverse ? twin -> getNumEdges() : numEdges; }
+    const std::vector<uint64_t> &getSources() const { return isInverse ? twin->getTargets() : tree->getSources(); }
+    const std::vector<uint64_t> &getTargets() const { return isInverse ? twin->getSources() : tree->getTargets(); }
+    const uint32_t getNoSources() const { return isInverse ? twin->getNoTargets() : tree->getNoSources(); }
+    const uint32_t getNoTargets() const { return isInverse ? twin->getNoSources() : tree->getNoTargets(); }
+    const uint32_t getNumEdges() const { return isInverse ? twin->getNumEdges() : tree->getNoEdges(); }
+    const uint32_t getSourceOut1() const { return isInverse ? twin->getTargetIn1() : tree->getNoSourcesDeg1(); }
+    const uint32_t getTargetIn1() const { return isInverse ? twin->getSourceOut1() : tree->getNoTargetsDeg1(); }
 
-    void calculateSize() {
-        numSources = SimpleEstimator::countBitsSet(&sources);
-        numTargets = SimpleEstimator::countBitsSet(&targets);
-    }
-
-    void insertEdge(uint32_t s, uint32_t t) {
-        sources[s / 64] |= 1ULL << (s % 64);
-        targets[t / 64] |= 1ULL << (t % 64);
-        numEdges++;
-    }
-
-    void incrementSourceOut1() {
-        sourceOut1++;
-    }
-
-    void incrementTargetIn1() {
-        targetIn1++;
-    }
-
-    uint32_t getSourceOut1() const {
-        return isInverse ? twin -> targetIn1 : sourceOut1;
-    }
-
-    uint32_t getTargetIn1() const {
-        return isInverse ? twin -> sourceOut1 : targetIn1;
+    void setTree(K2Tree *tree) {
+        labelStat::tree = tree;
     }
 
     const void print() const {
         std::cout << "Label id=" << id << (isInverse ? "-" : "+") << ", uid=" << uid << ": #sources=" << std::left << std::setw(8)
-                  << getNumSources() << "#targets=" << std::setw(8) << getNumTargets() << "#edges="
+                  << getNoSources() << "#targets=" << std::setw(8) << getNoTargets() << "#edges="
                   << std::setw(8) << getNumEdges() << "#sourceOut1=" << std::setw(8) << getSourceOut1()
                   << "#targetIn1=" << std::setw(8) << getTargetIn1() << std::endl;
     }
@@ -175,8 +137,8 @@ struct joinStat {
 
         auto targets = &source->getTargets();
         auto sources = &target->getSources();
-        commonNodes = SimpleEstimator::doAnd(&source->getTargets(), &target->getSources());
-        numCommonNodes = SimpleEstimator::countBitsSet(&commonNodes);
+        commonNodes = doAnd(&source->getTargets(), &target->getSources());
+        numCommonNodes = popcountVector(&commonNodes);
 
         // If the set of common nodes is empty, free the space of the vector.
         if(numCommonNodes == 0) {

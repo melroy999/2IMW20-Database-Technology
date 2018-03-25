@@ -4,6 +4,7 @@
 #include <Estimator.h>
 #include <SimpleEstimator.h>
 #include <SimpleEvaluator.h>
+#include <regex>
 
 
 struct query {
