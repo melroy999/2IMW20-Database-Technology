@@ -27,10 +27,12 @@ public:
 
 protected:
     uint32_t V;
+    std::vector<uint32_t> numEdges;
+    uint32_t E;
     uint32_t L;
 
 public:
-    SimpleGraph() : V(0), L(0) {};
+    SimpleGraph() : V(0), E(0), L(0) {};
     ~SimpleGraph() = default;
     explicit SimpleGraph(uint32_t n);
 

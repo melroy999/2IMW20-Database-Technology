@@ -13,8 +13,10 @@ uint32_t SimpleGraph::getNoVertices() const {
 }
 
 void SimpleGraph::setDataStructureSizes() {
+    E = 0;
     adj.resize(getNoLabels());
     reverse_adj.resize(getNoLabels());
+    numEdges.resize(getNoLabels());
 
     for (auto &l : adj)
         l.resize(V);
@@ -28,54 +30,11 @@ void SimpleGraph::setNoVertices(uint32_t n) {
 }
 
 uint32_t SimpleGraph::getNoEdges() const {
-    uint32_t sum = 0;
-    for (const auto &l : adj)
-        for(const auto &v : l)
-            sum += v.size();
-    return sum;
+    return E;
 }
 
 uint32_t SimpleGraph::getNoDistinctEdges() const {
-
-    uint32_t sum = 0;
-
-    if(adj_ptr) {
-        for (auto sourceVec : *adj_ptr) {
-
-            std::sort(sourceVec.begin(), sourceVec.end());
-
-            uint32_t prevTarget = 0;
-            bool first = true;
-
-            for (const auto &target : sourceVec) {
-                if (first || prevTarget != target) {
-                    first = false;
-                    sum++;
-                    prevTarget = target;
-                }
-            }
-        }
-    }
-
-    for (const auto &labelVec : adj) {
-        for (auto sourceVec : labelVec) {
-
-            std::sort(sourceVec.begin(), sourceVec.end());
-
-            uint32_t prevTarget = 0;
-            bool first = true;
-
-            for (const auto &target : sourceVec) {
-                if (first || prevTarget != target) {
-                    first = false;
-                    sum++;
-                    prevTarget = target;
-                }
-            }
-        }
-    }
-
-    return sum;
+    return E;
 }
 
 uint32_t SimpleGraph::getNoLabels() const {
@@ -92,6 +51,8 @@ void SimpleGraph::addEdge(uint32_t from, uint32_t to, uint32_t edgeLabel) {
                                          "(" + std::to_string(from) + "," + std::to_string(to) + "," +
                                          std::to_string(edgeLabel) + ")");
 
+    E += 1;
+    numEdges[edgeLabel] += 1;
     adj[edgeLabel][from].emplace_back(to);
     reverse_adj[edgeLabel][to].emplace_back(from);
 }
@@ -100,6 +61,7 @@ void SimpleGraph::addEdges(std::shared_ptr<SimpleGraph> &in, uint32_t projectLab
 
     auto _adj = &in->adj[projectLabel];
     auto _reverse_adj = &in->reverse_adj[projectLabel];
+    E = in->numEdges[projectLabel];
 
     if(!isInverse) {
         adj_ptr = _adj;
@@ -138,13 +100,50 @@ void SimpleGraph::readFromContiguousFile(const std::string &fileName) {
     setNoVertices(noNodes);
     setDataStructureSizes();
 
+    std::vector<std::tuple<uint32_t, uint32_t, uint32_t>> edges;
+    edges.reserve(noEdges);
+
     for(int i = 0; i < noEdges; i++) {
         uint32_t subject, predicate, object;
 
         file >> subject >> predicate >> object;
         file.ignore(INT32_MAX, '\n');
 
-        addEdge(subject, object, predicate);
+        // We place them in the order of importance. We want the order predicate > subject > object.
+        edges.emplace_back(predicate, subject, object);
+    }
+
+    // Sort the vector.
+    std::sort(edges.begin(), edges.end());
+
+    // Add the edges in sorted order, do not add duplicates.
+    std::tuple<uint32_t, uint32_t, uint32_t> lastTuple;
+
+    bool first = true;
+    uint32_t lastSource = 0;
+    uint32_t lastTarget = 0;
+    uint32_t lastLabel = 0;
+
+    for(auto const &tuple : edges) {
+        uint32_t source = std::get<1>(tuple);
+        uint32_t target = std::get<2>(tuple);
+        uint32_t label = std::get<0>(tuple);
+
+        if(first || !(lastSource == source && lastTarget == target && lastLabel == label)) {
+            first = false;
+            lastSource = source;
+            lastTarget = target;
+            lastLabel = label;
+
+            addEdge(source, target, label);
+        }
+    }
+
+    // For the leaf level, we want the reverse adjacency to be sorted as well.
+    for(auto &adj_list : reverse_adj) {
+        for(auto &vertices : adj_list) {
+            std::sort(vertices.begin(), vertices.end());
+        }
     }
 
     file.close();

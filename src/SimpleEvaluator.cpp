@@ -38,7 +38,7 @@ cardStat SimpleEvaluator::computeStats(std::shared_ptr<SimpleGraph> &g) {
         if(!(*_adj)[source].empty()) stats.noOut++;
     }
 
-    stats.noPaths = g->getNoDistinctEdges();
+    stats.noPaths = g->getNoEdges();
 
     for(int target = 0; target < g->getNoVertices(); target++) {
         if(!(*_reverse_adj)[target].empty()) stats.noIn++;
@@ -69,54 +69,42 @@ std::shared_ptr<SimpleGraph> SimpleEvaluator::join(std::shared_ptr<SimpleGraph> 
     out->setNoLabels(1);
     out->setDataStructureSizes();
 
-    if(est) {
-        auto leftMatrix = left->reverse_adj_ptr ? left->reverse_adj_ptr: &left->reverse_adj[0];
-        auto rightMatrix = right->adj_ptr ? right->adj_ptr: &right->adj[0];
+    auto leftMatrix = left->adj_ptr ? left->adj_ptr: &left->adj[0];
+    auto rightMatrix = right->adj_ptr ? right->adj_ptr: &right->adj[0];
 
-        // Use statistics in the estimator.
-        joinStat* joinData = &est->joinData[left->L_right][right->L_left];
+    // We want to make sure that the result of the join is sorted in vertex order, without duplicates.
+    // By using this assumption, we know that our input is always in sorted order as well.
+    std::vector<uint32_t> targets;
 
-        for(uint32_t i = 0; i < joinData->commonNodes.size(); i++) {
-            auto bucket = joinData->commonNodes[i];
+    for(uint32_t s = 0; s < left->getNoVertices(); s++) {
+        for (auto c : (*leftMatrix)[s]) {
 
-            if(bucket != 0ULL) {
-                for(uint32_t j = 0; j < 64; j++) {
-                    if(CHECK_BIT(bucket, j)) {
+            auto options = &(*rightMatrix)[c];
 
-                        // Get the left and right targets.
-                        auto leftSources = (*leftMatrix)[i * 64 + j];
-
-                        // Get the left and right targets.
-                        auto rightTargets = (*rightMatrix)[i * 64 + j];
-
-                        for(auto s : leftSources) {
-                            for(auto t : rightTargets) {
-                                out->addEdge(s, t, 0);
-                            }
-                        }
-                    }
-                }
+            // Add the entirety of _targets to the end of targets, and call an in-place merge.
+            if(!options->empty()) {
+                targets.insert(targets.end(), options->begin(), options->end());
+                std::inplace_merge(targets.begin(), targets.end() - options->size(), targets.end());
             }
         }
-    } else {
-        auto leftMatrix = left->adj_ptr ? left->adj_ptr: &left->adj[0];
-        auto rightMatrix = right->adj_ptr ? right->adj_ptr: &right->adj[0];
 
-        for(uint32_t leftSource = 0; leftSource < left->getNoVertices(); leftSource++) {
-            for (auto leftTarget : (*leftMatrix)[leftSource]) {
+        if(!targets.empty()) {
+            // We know that the targets list is sorted, so insert without duplicates.
+            uint32_t previous = 0;
+            bool first = true;
 
-                // try to join the left target with right source
-                for (auto rightTarget : (*rightMatrix)[leftTarget]) {
+            for(auto t : targets) {
+                if (first || previous != t) {
+                    out->addEdge(s, t, 0);
 
-                    out->addEdge(leftSource, rightTarget, 0);
-
+                    previous = t;
+                    first = false;
                 }
             }
+
+            targets.clear();
         }
     }
-
-    out->L_left = left->L_left;
-    out->L_right = right->L_right;
 
     return out;
 }
