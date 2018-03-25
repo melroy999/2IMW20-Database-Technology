@@ -35,9 +35,6 @@ class SimpleEstimator : public Estimator {
 
     std::shared_ptr<SimpleGraph> graph;
 
-    std::vector<labelStat> labelData = std::vector<labelStat>();
-    std::vector<std::vector<joinStat>> joinData;
-
 public:
     explicit SimpleEstimator(std::shared_ptr<SimpleGraph> &g);
     ~SimpleEstimator() = default;
@@ -50,13 +47,14 @@ public:
 
     static uint32_t countBitsSet(std::vector<uint64_t> *result);
 
-    static bool sortEdges(const std::pair<uint32_t, uint32_t> &a, const std::pair<uint32_t, uint32_t> &b);
-
     exCardStat estimateLeafNode(RPQTree *q);
 
     exCardStat estimateSimpleJoin(exCardStat *leftStat, exCardStat *rightStat);
 
     exCardStat estimateJoin(exCardStat *leftStat, exCardStat *rightStat);
+
+    std::vector<std::vector<joinStat>> joinData;
+    std::vector<labelStat> labelData = std::vector<labelStat>();
 };
 
 struct labelStat {

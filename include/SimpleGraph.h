@@ -22,12 +22,14 @@ public:
     std::vector<std::vector<uint32_t>> *adj_ptr = nullptr;
     std::vector<std::vector<uint32_t>> *reverse_adj_ptr = nullptr;
 
+    int L_left = -1;
+    int L_right = -1;
+
 protected:
     uint32_t V;
     uint32_t L;
 
 public:
-
     SimpleGraph() : V(0), L(0) {};
     ~SimpleGraph() = default;
     explicit SimpleGraph(uint32_t n);

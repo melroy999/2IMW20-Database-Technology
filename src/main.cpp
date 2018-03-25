@@ -134,41 +134,54 @@ int evaluatorBench(std::string &graphFile, std::string &queriesFile) {
     auto end = std::chrono::steady_clock::now();
     std::cout << "Time to read the graph into memory: " << std::chrono::duration<double, std::milli>(end - start).count() << " ms" << std::endl;
 
-    // prepare the evaluator
-    auto est = std::make_shared<SimpleEstimator>(g);
-    auto ev = std::make_unique<SimpleEvaluator>(g);
-    ev->attachEstimator(est);
 
-    start = std::chrono::steady_clock::now();
-    ev->prepare();
-    end = std::chrono::steady_clock::now();
-    std::cout << "Time to prepare the evaluator: " << std::chrono::duration<double, std::milli>(end - start).count() << " ms" << std::endl;
 
-    std::cout << "\n(2) Running the query workload..." << std::endl;
+    double totalTime = 0;
 
-    for(auto query : parseQueries(queriesFile)) {
+    auto queries = parseQueries(queriesFile);
 
-        // perform estimation
-        // parse the query into an AST
-        std::cout << "\nProcessing query: ";
-        query.print();
-        RPQTree *queryTree = RPQTree::strToTree(query.path);
-        std::cout << "Parsed query tree: ";
-        queryTree->print();
+    const uint32_t noRuns = 100;
+    for(uint32_t i = 0; i < noRuns; i++) {
+        // prepare the evaluator
+        auto est = std::make_shared<SimpleEstimator>(g);
+        auto ev = std::make_unique<SimpleEvaluator>(g);
+        ev->attachEstimator(est);
 
-        // perform the evaluation
         start = std::chrono::steady_clock::now();
-        auto actual = ev->evaluate(queryTree);
+        ev->prepare();
         end = std::chrono::steady_clock::now();
+        std::cout << "Time to prepare the evaluator: " << std::chrono::duration<double, std::milli>(end - start).count() << " ms" << std::endl;
 
-        std::cout << "\nActual (noOut, noPaths, noIn) : ";
-        actual.print();
-        std::cout << "Time to evaluate: " << std::chrono::duration<double, std::milli>(end - start).count() << " ms" << std::endl;
+        std::cout << "\n(2) Running the query workload..." << std::endl;
 
-        // clean-up
-        delete(queryTree);
+        for(auto query : queries) {
 
+            // perform estimation
+            // parse the query into an AST
+            std::cout << "\nProcessing query: ";
+            query.print();
+            RPQTree *queryTree = RPQTree::strToTree(query.path);
+            std::cout << "Parsed query tree: ";
+            queryTree->print();
+
+            // perform the evaluation
+            start = std::chrono::steady_clock::now();
+            auto actual = ev->evaluate(queryTree);
+            end = std::chrono::steady_clock::now();
+
+            std::cout << "\nActual (noOut, noPaths, noIn) : ";
+            actual.print();
+            totalTime += std::chrono::duration<double, std::milli>(end - start).count();
+            std::cout << "Time to evaluate: " << std::chrono::duration<double, std::milli>(end - start).count() << " ms" << std::endl;
+
+            // clean-up
+            delete(queryTree);
+
+        }
     }
+
+    std::cout << std::endl << "Total evaluation time: " << totalTime << std::endl;
+    std::cout << std::endl << "Average evaluation time per run: " << totalTime / noRuns << std::endl;
 
     return 0;
 }
@@ -185,8 +198,8 @@ int main(int argc, char *argv[]) {
     std::string graphFile {argv[1]};
     std::string queriesFile {argv[2]};
 
-    estimatorBench(graphFile, queriesFile);
-//    evaluatorBench(graphFile, queriesFile);
+//    estimatorBench(graphFile, queriesFile);
+    evaluatorBench(graphFile, queriesFile);
 
     return 0;
 }

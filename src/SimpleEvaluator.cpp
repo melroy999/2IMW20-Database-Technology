@@ -54,8 +54,14 @@ std::shared_ptr<SimpleGraph> SimpleEvaluator::project(uint32_t projectLabel, boo
     // Why loop here over all the data, while we can just extract the data in one sweep?
     out->addEdges(in, projectLabel, inverse);
 
+    out->L_left = projectLabel + (!inverse ? 0 : in->getNoLabels());
+    out->L_right = projectLabel + (!inverse ? 0 : in->getNoLabels());
+
     return out;
 }
+
+
+#define CHECK_BIT(var,pos) ((var) & (1ULL<<(pos)))
 
 std::shared_ptr<SimpleGraph> SimpleEvaluator::join(std::shared_ptr<SimpleGraph> &left, std::shared_ptr<SimpleGraph> &right) {
 
@@ -63,20 +69,54 @@ std::shared_ptr<SimpleGraph> SimpleEvaluator::join(std::shared_ptr<SimpleGraph> 
     out->setNoLabels(1);
     out->setDataStructureSizes();
 
-    auto leftMatrix = left->adj_ptr ? left->adj_ptr: &left->adj[0];
-    auto rightMatrix = right->adj_ptr ? right->adj_ptr: &right->adj[0];
+    if(est) {
+        auto leftMatrix = left->reverse_adj_ptr ? left->reverse_adj_ptr: &left->reverse_adj[0];
+        auto rightMatrix = right->adj_ptr ? right->adj_ptr: &right->adj[0];
 
-    for(uint32_t leftSource = 0; leftSource < left->getNoVertices(); leftSource++) {
-        for (auto leftTarget : (*leftMatrix)[leftSource]) {
+        // Use statistics in the estimator.
+        joinStat* joinData = &est->joinData[left->L_right][right->L_left];
 
-            // try to join the left target with right source
-            for (auto rightTarget : (*rightMatrix)[leftTarget]) {
+        for(uint32_t i = 0; i < joinData->commonNodes.size(); i++) {
+            auto bucket = joinData->commonNodes[i];
 
-                out->addEdge(leftSource, rightTarget, 0);
+            if(bucket != 0ULL) {
+                for(uint32_t j = 0; j < 64; j++) {
+                    if(CHECK_BIT(bucket, j)) {
 
+                        // Get the left and right targets.
+                        auto leftSources = (*leftMatrix)[i * 64 + j];
+
+                        // Get the left and right targets.
+                        auto rightTargets = (*rightMatrix)[i * 64 + j];
+
+                        for(auto s : leftSources) {
+                            for(auto t : rightTargets) {
+                                out->addEdge(s, t, 0);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    } else {
+        auto leftMatrix = left->adj_ptr ? left->adj_ptr: &left->adj[0];
+        auto rightMatrix = right->adj_ptr ? right->adj_ptr: &right->adj[0];
+
+        for(uint32_t leftSource = 0; leftSource < left->getNoVertices(); leftSource++) {
+            for (auto leftTarget : (*leftMatrix)[leftSource]) {
+
+                // try to join the left target with right source
+                for (auto rightTarget : (*rightMatrix)[leftTarget]) {
+
+                    out->addEdge(leftSource, rightTarget, 0);
+
+                }
             }
         }
     }
+
+    out->L_left = left->L_left;
+    out->L_right = right->L_right;
 
     return out;
 }

@@ -35,7 +35,7 @@ public:
     RPQTree * rewrite_query_tree(RPQTree *q);
     std::string get_string_query(RPQTree *q);
     static std::shared_ptr<SimpleGraph> project(uint32_t label, bool inverse, std::shared_ptr<SimpleGraph> &g);
-    static std::shared_ptr<SimpleGraph> join(std::shared_ptr<SimpleGraph> &left, std::shared_ptr<SimpleGraph> &right);
+    std::shared_ptr<SimpleGraph> join(std::shared_ptr<SimpleGraph> &left, std::shared_ptr<SimpleGraph> &right);
 
     static cardStat computeStats(std::shared_ptr<SimpleGraph> &g);
 
