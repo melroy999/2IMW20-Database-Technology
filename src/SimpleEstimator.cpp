@@ -4,36 +4,10 @@
 
 #include <SimpleEstimator.h>
 
-#define CHECK_BIT(var,pos) ((var) & (1ULL<<(pos)))
-#define SET_BIT(pos) (1ULL << ((pos) % 64))
-
 SimpleEstimator::SimpleEstimator(std::shared_ptr<SimpleGraph> &g){
 
     // works only with SimpleGraph
     graph = g;
-}
-
-uint32_t SimpleEstimator::countBitsSet(std::vector<uint64_t>* result) {
-    uint32_t sum = 0;
-    for(auto v : *result) {
-        if(v == 0) continue;
-        sum += __builtin_popcountll(v);
-    }
-    return sum;
-}
-
-std::vector<uint64_t> SimpleEstimator::doAnd(const std::vector<uint64_t> *t, const std::vector<uint64_t> *s) {
-
-    // If the sizes do not correspond, return an empty join.
-    std::vector<uint64_t> result(t->size());
-    if(t->size() != s->size()) {
-        return result;
-    }
-
-    for(unsigned long i = t->size() ; i -- > 0 ; ) {
-        result[i] = (*t)[i] & (*s)[i];
-    }
-    return result;
 }
 
 void SimpleEstimator::prepare() {

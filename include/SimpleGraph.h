@@ -13,17 +13,46 @@
 #include <fstream>
 #include "Graph.h"
 
+#define CHECK_BIT(var,pos) ((var) & (1ULL<<(pos)))
+#define SET_BIT(pos) (1ULL << ((pos) % 64))
+
+static uint32_t countBitsSet(std::vector<uint64_t>* result) {
+    uint32_t sum = 0;
+    for(auto v : *result) {
+        if(v == 0) continue;
+        sum += __builtin_popcountll(v);
+    }
+    return sum;
+}
+
+static std::vector<uint64_t> doAnd(const std::vector<uint64_t> *t, const std::vector<uint64_t> *s) {
+
+    // If the sizes do not correspond, return an empty join.
+    std::vector<uint64_t> result(t->size());
+    if(t->size() != s->size()) {
+        return result;
+    }
+
+    for(unsigned long i = t->size() ; i -- > 0 ; ) {
+        result[i] = (*t)[i] & (*s)[i];
+    }
+    return result;
+}
+
 class SimpleGraph : public Graph {
 public:
+    // The adjacency list. The reverse adjacency list is unused in joins.
     std::vector<std::vector<std::vector<uint32_t>>> adj;
     std::vector<std::vector<std::vector<uint32_t>>> reverse_adj;
 
+    // The sources and targets of the graph, represented as a bitmap for each individual label.
+    std::vector<std::vector<uint64_t>> sources;
+    std::vector<std::vector<uint64_t>> targets;
+
     // Pointers to vectors in another vector, used to speed up certain operations.
     std::vector<std::vector<uint32_t>> *adj_ptr = nullptr;
-    std::vector<std::vector<uint32_t>> *reverse_adj_ptr = nullptr;
-
-    int L_left = -1;
-    int L_right = -1;
+    std::vector<uint64_t> *sources_ptr = nullptr;
+    std::vector<uint64_t> *targets_ptr = nullptr;
 
 protected:
     uint32_t V;
@@ -47,7 +76,7 @@ public:
     void setNoVertices(uint32_t n);
     void setNoLabels(uint32_t noLabels);
 
-    void setDataStructureSizes();
+    void setDataStructureSizes(bool isJoin);
 
     void addEdges(std::shared_ptr<SimpleGraph> &in, uint32_t projectLabel, bool isInverse);
 };

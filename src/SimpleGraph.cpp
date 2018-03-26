@@ -2,6 +2,7 @@
 // Created by Nikolay Yakovets on 2018-01-31.
 //
 
+#include <cmath>
 #include "SimpleGraph.h"
 
 SimpleGraph::SimpleGraph(uint32_t n)   {
@@ -12,17 +13,21 @@ uint32_t SimpleGraph::getNoVertices() const {
     return V;
 }
 
-void SimpleGraph::setDataStructureSizes() {
+void SimpleGraph::setDataStructureSizes(bool isJoin) {
     E = 0;
-    adj.resize(getNoLabels());
-    reverse_adj.resize(getNoLabels());
     numEdges.resize(getNoLabels());
+    sources.resize(getNoLabels(), std::vector<uint64_t>(static_cast<unsigned long>(std::ceil((double) V / 64))));
+    targets.resize(getNoLabels(), std::vector<uint64_t>(static_cast<unsigned long>(std::ceil((double) V / 64))));
 
+    adj.resize(getNoLabels());
     for (auto &l : adj)
         l.resize(V);
 
-    for (auto &l : reverse_adj)
-        l.resize(V);
+    if(!isJoin) {
+        reverse_adj.resize(getNoLabels());
+        for (auto &l : reverse_adj)
+            l.resize(V);
+    }
 }
 
 void SimpleGraph::setNoVertices(uint32_t n) {
@@ -51,24 +56,30 @@ void SimpleGraph::addEdge(uint32_t from, uint32_t to, uint32_t edgeLabel) {
                                          "(" + std::to_string(from) + "," + std::to_string(to) + "," +
                                          std::to_string(edgeLabel) + ")");
 
+    sources[edgeLabel][from/64] |= SET_BIT(from % 64);
+    targets[edgeLabel][to/64] |= SET_BIT(to % 64);
+
     E += 1;
     numEdges[edgeLabel] += 1;
     adj[edgeLabel][from].emplace_back(to);
-    reverse_adj[edgeLabel][to].emplace_back(from);
+
+    if(!reverse_adj.empty()) {
+        reverse_adj[edgeLabel][to].emplace_back(from);
+    }
 }
 
 void SimpleGraph::addEdges(std::shared_ptr<SimpleGraph> &in, uint32_t projectLabel, bool isInverse) {
 
-    auto _adj = &in->adj[projectLabel];
-    auto _reverse_adj = &in->reverse_adj[projectLabel];
     E = in->numEdges[projectLabel];
 
     if(!isInverse) {
-        adj_ptr = _adj;
-        reverse_adj_ptr = _reverse_adj;
+        adj_ptr = &in->adj[projectLabel];
+        sources_ptr = &in->sources[projectLabel];
+        targets_ptr = &in->targets[projectLabel];
     } else {
-        adj_ptr = _reverse_adj;
-        reverse_adj_ptr = _adj;
+        adj_ptr = &in->reverse_adj[projectLabel];
+        sources_ptr = &in->targets[projectLabel];
+        targets_ptr = &in->sources[projectLabel];
     }
 }
 
@@ -98,7 +109,7 @@ void SimpleGraph::readFromContiguousFile(const std::string &fileName) {
 
     setNoLabels(noLabels);
     setNoVertices(noNodes);
-    setDataStructureSizes();
+    setDataStructureSizes(false);
 
     std::vector<std::tuple<uint32_t, uint32_t, uint32_t>> edges;
     edges.reserve(noEdges);

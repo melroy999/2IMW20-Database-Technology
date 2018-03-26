@@ -31,18 +31,10 @@ cardStat SimpleEvaluator::computeStats(std::shared_ptr<SimpleGraph> &g) {
 
     cardStat stats {};
 
-    auto _adj = g->adj_ptr ? g->adj_ptr: &g->adj[0];
-    auto _reverse_adj = g->reverse_adj_ptr ? g->reverse_adj_ptr: &g->reverse_adj[0];
-
-    for(int source = 0; source < g->getNoVertices(); source++) {
-        if(!(*_adj)[source].empty()) stats.noOut++;
-    }
-
+    // Use the source and target vectors to determine the number of sources and targets.
+    stats.noOut = countBitsSet(g->adj_ptr ? g->sources_ptr : &g->sources[0]);
     stats.noPaths = g->getNoEdges();
-
-    for(int target = 0; target < g->getNoVertices(); target++) {
-        if(!(*_reverse_adj)[target].empty()) stats.noIn++;
-    }
+    stats.noIn = countBitsSet(g->adj_ptr ? g->targets_ptr : &g->targets[0]);
 
     return stats;
 }
@@ -54,9 +46,6 @@ std::shared_ptr<SimpleGraph> SimpleEvaluator::project(uint32_t projectLabel, boo
     // Why loop here over all the data, while we can just extract the data in one sweep?
     out->addEdges(in, projectLabel, inverse);
 
-    out->L_left = projectLabel + (!inverse ? 0 : in->getNoLabels());
-    out->L_right = projectLabel + (!inverse ? 0 : in->getNoLabels());
-
     return out;
 }
 
@@ -67,7 +56,7 @@ std::shared_ptr<SimpleGraph> SimpleEvaluator::join(std::shared_ptr<SimpleGraph> 
 
     auto out = std::make_shared<SimpleGraph>(left->getNoVertices());
     out->setNoLabels(1);
-    out->setDataStructureSizes();
+    out->setDataStructureSizes(true);
 
     auto leftMatrix = left->adj_ptr ? left->adj_ptr: &left->adj[0];
     auto rightMatrix = right->adj_ptr ? right->adj_ptr: &right->adj[0];

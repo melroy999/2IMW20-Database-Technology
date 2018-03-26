@@ -43,10 +43,6 @@ public:
     cardStat estimate(RPQTree *q) override ;
     exCardStat doEstimation(RPQTree *q);
 
-    static std::vector<uint64_t> doAnd(const std::vector<uint64_t> *t, const std::vector<uint64_t> *s);
-
-    static uint32_t countBitsSet(std::vector<uint64_t> *result);
-
     exCardStat estimateLeafNode(RPQTree *q);
 
     exCardStat estimateSimpleJoin(exCardStat *leftStat, exCardStat *rightStat);
@@ -109,8 +105,8 @@ public:
     const uint32_t getNumEdges() const { return isInverse ? twin -> getNumEdges() : numEdges; }
 
     void calculateSize() {
-        numSources = SimpleEstimator::countBitsSet(&sources);
-        numTargets = SimpleEstimator::countBitsSet(&targets);
+        numSources = countBitsSet(&sources);
+        numTargets = countBitsSet(&targets);
     }
 
     void insertEdge(uint32_t s, uint32_t t) {
@@ -173,8 +169,8 @@ struct joinStat {
 
         auto targets = &source->getTargets();
         auto sources = &target->getSources();
-        commonNodes = SimpleEstimator::doAnd(&source->getTargets(), &target->getSources());
-        numCommonNodes = SimpleEstimator::countBitsSet(&commonNodes);
+        commonNodes = doAnd(&source->getTargets(), &target->getSources());
+        numCommonNodes = countBitsSet(&commonNodes);
 
         // If the set of common nodes is empty, free the space of the vector.
         if(numCommonNodes == 0) {
