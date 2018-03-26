@@ -230,7 +230,6 @@ RPQTree * SimpleEvaluator::rewrite_query_tree(RPQTree *query) {
 
                 auto queryTree = RPQTree::strToTree(queryPair);
                 cardStat estimate = est->estimate(queryTree);
-                delete(queryTree);
                 estimates.push_back(estimate.noPaths);
                 estCache.insert(std::make_pair(queryPair, estimate.noPaths));
             }
@@ -262,13 +261,12 @@ cardStat SimpleEvaluator::evaluate(RPQTree *query) {
         return finalCache[queryString];
     }
 
-    auto optimizedQuery = query;
     if(est){
-        optimizedQuery = rewrite_query_tree(query);
+
+        query = rewrite_query_tree(query);
     }
 
-    auto res = evaluate_aux(optimizedQuery);
-    delete(optimizedQuery);
+    auto res = evaluate_aux(query);
     auto stats = SimpleEvaluator::computeStats(res);
 
     finalCache.insert(std::make_pair(queryString, stats));
