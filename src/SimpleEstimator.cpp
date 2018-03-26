@@ -32,10 +32,12 @@ void SimpleEstimator::prepare() {
     for(uint32_t label = 0; label < graph->getNoLabels(); label++) {
         for (uint32_t vertex = 0; vertex < graph->getNoVertices(); vertex++) {
             // Count which vertices have an out degree of one with respect to the current label.
-            if (graph->adj[label][vertex].size() == 1) labelData[label].incrementSourceOut1();
+            if (graph->adj[label][vertex] && graph->adj[label][vertex]->size() == 1)
+                labelData[label].incrementSourceOut1();
 
             // Count which vertices have an in degree of one with respect to the current label.
-            if (graph->reverse_adj[label][vertex].size() == 1) labelData[label].incrementTargetIn1();
+            if (graph->reverse_adj[label][vertex] && graph->reverse_adj[label][vertex]->size() == 1)
+                labelData[label].incrementTargetIn1();
         }
     }
 
@@ -71,45 +73,53 @@ void SimpleEstimator::prepare() {
                         for(uint32_t j = 0; j < 64; j++) {
                             if(CHECK_BIT(bucket, j)) {
 
-                                int sources = 0;
+                                std::vector<uint32_t>* sourceVertices = w.source < graph->getNoLabels() ?
+                                               graph->reverse_adj[w.source % graph->getNoLabels()][i * 64 + j] :
+                                               graph->adj[w.source % graph->getNoLabels()][i * 64 + j];
 
-                                // Filter out duplicates.
-                                uint32_t prevTarget = 0;
-                                bool first = true;
+                                std::vector<uint32_t>* targetVertices = w.target < graph->getNoLabels() ?
+                                                                        graph->adj[w.target % graph->getNoLabels()][i * 64 + j] :
+                                                                        graph->reverse_adj[w.target % graph->getNoLabels()][i * 64 + j];
 
-                                for(const auto &target : w.source < graph->getNoLabels() ?
-                                                       graph->reverse_adj[w.source % graph->getNoLabels()][i * 64 + j] :
-                                                       graph->adj[w.source % graph->getNoLabels()][i * 64 + j])
-                                {
-                                    if (first || prevTarget != target) {
-                                        w.sourceNodes[target / 64] |= SET_BIT(target);
-                                        sources++;
-                                        w.numSourceEdges++;
+                                if(sourceVertices && targetVertices) {
+                                    int sources = 0;
 
-                                        first = false;
-                                        prevTarget = target;
+                                    // Filter out duplicates.
+                                    uint32_t prevTarget = 0;
+                                    bool first = true;
+
+                                    for(const auto &target : *sourceVertices)
+                                    {
+                                        if (first || prevTarget != target) {
+                                            w.sourceNodes[target / 64] |= SET_BIT(target);
+                                            sources++;
+                                            w.numSourceEdges++;
+
+                                            first = false;
+                                            prevTarget = target;
+                                        }
                                     }
+
+                                    prevTarget = 0;
+                                    first = true;
+
+                                    int targets = 0;
+                                    for(const auto &target : *targetVertices)
+                                    {
+                                        if (first || prevTarget != target) {
+                                            w.targetNodes[target / 64] |= SET_BIT(target);
+                                            targets++;
+                                            w.numTargetEdges++;
+
+                                            first = false;
+                                            prevTarget = target;
+                                        }
+                                    }
+
+                                    paths += sources * targets;
                                 }
 
-                                prevTarget = 0;
-                                first = true;
 
-                                int targets = 0;
-                                for(const auto &target : w.target < graph->getNoLabels() ?
-                                                       graph->adj[w.target % graph->getNoLabels()][i * 64 + j] :
-                                                       graph->reverse_adj[w.target % graph->getNoLabels()][i * 64 + j])
-                                {
-                                    if (first || prevTarget != target) {
-                                        w.targetNodes[target / 64] |= SET_BIT(target);
-                                        targets++;
-                                        w.numTargetEdges++;
-
-                                        first = false;
-                                        prevTarget = target;
-                                    }
-                                }
-
-                                paths += sources * targets;
                             }
                         }
                     }

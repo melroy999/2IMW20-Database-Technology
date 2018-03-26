@@ -61,10 +61,33 @@ void SimpleGraph::addEdge(uint32_t from, uint32_t to, uint32_t edgeLabel) {
 
     E += 1;
     numEdges[edgeLabel] += 1;
-    adj[edgeLabel][from].emplace_back(to);
+
+    if(!adj[edgeLabel][from]) {
+        adj[edgeLabel][from] = new std::vector<uint32_t>();
+    }
+    adj[edgeLabel][from]->emplace_back(to);
 
     if(!reverse_adj.empty()) {
-        reverse_adj[edgeLabel][to].emplace_back(from);
+        if(!reverse_adj[edgeLabel][to]) {
+            reverse_adj[edgeLabel][to] = new std::vector<uint32_t>();
+        }
+
+        reverse_adj[edgeLabel][to]->emplace_back(from);
+    }
+}
+
+void SimpleGraph::addEdges(uint32_t from, std::vector<uint32_t> &data, std::vector<uint32_t>::iterator &end) {
+    if(!adj[0][from]) {
+        adj[0][from] = new std::vector<uint32_t>(static_cast<unsigned long>(std::distance(data.begin(), end)));
+    }
+
+    std::copy(data.begin(), end, adj[0][from]->begin());
+    E += adj[0][from]->size();
+    numEdges[0] += adj[0][from]->size();
+
+    sources[0][from/64] |= SET_BIT(from % 64);
+    for(const auto to : *adj[0][from]) {
+        targets[0][to/64] |= SET_BIT(to % 64);
     }
 }
 
@@ -152,10 +175,26 @@ void SimpleGraph::readFromContiguousFile(const std::string &fileName) {
 
     // For the leaf level, we want the reverse adjacency to be sorted as well.
     for(auto &adj_list : reverse_adj) {
-        for(auto &vertices : adj_list) {
-            std::sort(vertices.begin(), vertices.end());
+        for(auto vertices : adj_list) {
+            if(vertices) {
+                std::sort(vertices->begin(), vertices->end());
+            }
         }
     }
 
     file.close();
+}
+
+SimpleGraph::~SimpleGraph() {
+    for(const auto &matrix : adj) {
+        for(const auto &v : matrix) {
+            delete v;
+        }
+    }
+
+    for(const auto &matrix : reverse_adj) {
+        for(const auto &v : matrix) {
+            delete v;
+        }
+    }
 }

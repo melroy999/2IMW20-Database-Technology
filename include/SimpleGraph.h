@@ -42,15 +42,15 @@ static std::vector<uint64_t> doAnd(const std::vector<uint64_t> *t, const std::ve
 class SimpleGraph : public Graph {
 public:
     // The adjacency list. The reverse adjacency list is unused in joins.
-    std::vector<std::vector<std::vector<uint32_t>>> adj;
-    std::vector<std::vector<std::vector<uint32_t>>> reverse_adj;
+    std::vector<std::vector<std::vector<uint32_t>*>> adj;
+    std::vector<std::vector<std::vector<uint32_t>*>> reverse_adj;
 
     // The sources and targets of the graph, represented as a bitmap for each individual label.
     std::vector<std::vector<uint64_t>> sources;
     std::vector<std::vector<uint64_t>> targets;
 
     // Pointers to vectors in another vector, used to speed up certain operations.
-    std::vector<std::vector<uint32_t>> *adj_ptr = nullptr;
+    std::vector<std::vector<uint32_t>*> *adj_ptr = nullptr;
     std::vector<uint64_t> *sources_ptr = nullptr;
     std::vector<uint64_t> *targets_ptr = nullptr;
 
@@ -64,7 +64,7 @@ protected:
 
 public:
     SimpleGraph() : V(0), E(0), L(0) {};
-    ~SimpleGraph() = default;
+    ~SimpleGraph();
     explicit SimpleGraph(uint32_t n);
 
     uint32_t getNoVertices() const override ;
@@ -81,6 +81,8 @@ public:
     void setDataStructureSizes(bool isJoin);
 
     void addEdges(std::shared_ptr<SimpleGraph> &in, uint32_t projectLabel, bool isInverse);
+
+    void addEdges(uint32_t from, std::vector<uint32_t> &data, std::vector<uint32_t>::iterator &end);
 };
 
 #endif //QS_SIMPLEGRAPH_H

@@ -72,32 +72,26 @@ std::shared_ptr<SimpleGraph> SimpleEvaluator::join(std::shared_ptr<SimpleGraph> 
 
         if(bucket != 0ULL) {
             for(uint32_t s = 64 * i; s < std::min<long>(64 * (i + 1), leftMatrix->size()); s++) {
-                for (auto c : (*leftMatrix)[s]) {
 
-                    auto options = &(*rightMatrix)[c];
+                if((*leftMatrix)[s]) {
+                    for (auto c : *(*leftMatrix)[s]) {
 
-                    // Add the entirety of _targets to the end of targets, and call an in-place merge.
-                    if(!options->empty()) {
-                        targets.insert(targets.end(), options->begin(), options->end());
-                        std::inplace_merge(targets.begin(), targets.end() - options->size(), targets.end());
-                    }
-                }
+                        std::vector<uint32_t>* options = (*rightMatrix)[c];
 
-                if(!targets.empty()) {
-                    // We know that the targets list is sorted, so insert without duplicates.
-                    uint32_t previous = 0;
-                    bool first = true;
-
-                    for(auto t : targets) {
-                        if (first || previous != t) {
-                            out->addEdge(s, t, 0);
-
-                            previous = t;
-                            first = false;
+                        // Add the entirety of _targets to the end of targets, and call an in-place merge.
+                        if(options) {
+                            targets.insert(targets.end(), options->begin(), options->end());
+                            std::inplace_merge(targets.begin(), targets.end() - options->size(), targets.end());
                         }
                     }
 
-                    targets.clear();
+                    if(!targets.empty()) {
+                        // Do a batch insert, as we know the exact number of edges we create.
+                        auto ip = std::unique(targets.begin(), targets.end());
+                        out->addEdges(s, targets, ip);
+
+                        targets.clear();
+                    }
                 }
             }
         }
