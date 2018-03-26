@@ -5,8 +5,6 @@
 #include "SimpleEstimator.h"
 #include "SimpleEvaluator.h"
 
-#include <regex>
-
 SimpleEvaluator::SimpleEvaluator(std::shared_ptr<SimpleGraph> &g) {
 
     // works only with SimpleGraph
@@ -130,165 +128,138 @@ std::shared_ptr<SimpleGraph> SimpleEvaluator::evaluate_aux(RPQTree *q) {
 
     if(q->isConcat()) {
 
+        std::string queryString = get_query_as_string(q);
+
+        if(resultsCache.find(queryString) != resultsCache.end()){
+
+            return resultsCache[queryString];
+        }
+
         // evaluate the children
         auto leftGraph = SimpleEvaluator::evaluate_aux(q->left);
         auto rightGraph = SimpleEvaluator::evaluate_aux(q->right);
 
         // join left with right
-        return SimpleEvaluator::join(leftGraph, rightGraph);
 
+        std::shared_ptr<SimpleGraph> result = SimpleEvaluator::join(leftGraph, rightGraph);
+
+        resultsCache.insert(std::make_pair(queryString, result));
+
+        return result;
     }
 
     return nullptr;
 }
 
 /**
- * Perform post-order tree traversal to get all possible pairs (that is left to right)
+ * Get the normalised form of a query, as a vector of nodes
  * @param q
  * @return
  */
-RPQTree * SimpleEvaluator::get_pairs(RPQTree *q, RPQTree *currentTree, RPQTree *bestTree) {
-
-    if(q->isLeaf()) {
-
-        if(currentTree){
-
-            std::string tree = get_string_query(currentTree);
-
-            std::string full = "(" + tree + "/" + q->data + ")";
-            RPQTree * newTree = RPQTree::strToTree(full);
-            labelPairs.emplace_back(newTree);
-
-            cardStat estimate = est->estimate(newTree);
-            estimates.emplace_back(estimate.noPaths);
-        }
-
-        return q;
-    }
-
-    if(q->isConcat()) {
-
-        // Check if this node is a "leaf" node
-
-        if(bestTree){
-
-            std::string qString = get_string_query(q);
-            std::string bestTreeString = get_string_query(bestTree);
-
-            if(qString == bestTreeString){
-
-                if(currentTree){
-
-                    std::string tree = get_string_query(currentTree);
-
-                    std::string full = "(" + tree + "/" + bestTreeString + ")";
-                    RPQTree * newTree = RPQTree::strToTree(full);
-                    labelPairs.emplace_back(newTree);
-
-                    cardStat estimate = est->estimate(newTree);
-                    estimates.emplace_back(estimate.noPaths);
-                }
-
-                return q;
-            }
-        }
-
-        // Traverse the left subtree recursively
-        RPQTree *leftTree = SimpleEvaluator::get_pairs(q->left, currentTree, bestTree);
-
-        // Traverse the right tree recursively
-        RPQTree *rightTree = SimpleEvaluator::get_pairs(q->right, leftTree, bestTree);
-
-        return rightTree;
-    }
-
-    return nullptr;
-}
-
-std::string SimpleEvaluator::get_string_query(RPQTree *q) {
+std::vector<std::string> SimpleEvaluator::get_query_graph(RPQTree *q, std::vector<std::string> nodes) {
 
     // evaluate according to the AST bottom-up
 
     if(q->isLeaf()) {
 
-        std::string label = q->data;
-        return label;
+        nodes.emplace_back(q->data);
+        return nodes;
     }
 
     if(q->isConcat()) {
 
-        std::string rightLabel = SimpleEvaluator::get_string_query(q->right);
-        std::string leftLabel = SimpleEvaluator::get_string_query(q->left);
-        std::string full = "(" + leftLabel + "/" + rightLabel + ")";
-        return full;
+        auto leftNodes = SimpleEvaluator::get_query_graph(q->left, nodes);
+        auto rightNodes = SimpleEvaluator::get_query_graph(q->right, nodes);
+        leftNodes.insert(leftNodes.end(), rightNodes.begin(), rightNodes.end());
+        return leftNodes;
     }
 
-    return nullptr;
+    return nodes;
 }
 
+
+/**
+ * Get a query tree as a string
+ * @param q
+ * @return
+ */
+std::string SimpleEvaluator::get_query_as_string(RPQTree *q) {
+
+    if(q->isLeaf()) {
+
+        return q->data;
+    }
+
+    if(q->isConcat()) {
+
+        std::string leftNodes = SimpleEvaluator::get_query_as_string(q->left);
+        std::string rightNodes = SimpleEvaluator::get_query_as_string(q->right);
+        return "(" + leftNodes + "/" + rightNodes +")";
+    }
+
+    return "";
+}
+
+/**
+ * Rewrite a given query tree to an optimal (according to estimates) variant
+ * @param query
+ * @return
+ */
 RPQTree * SimpleEvaluator::rewrite_query_tree(RPQTree *query) {
 
-    RPQTree *bestTree = nullptr;
-    std::string oldQuery = get_string_query(query);
-    std::string newQuery = "";
+    // First, normalise the query into a vector of nodes
+    std::vector<std::string> nodes;
+    std::vector<std::string> queryN = get_query_graph(query, nodes);
 
-    do{
-        labelPairs.clear();
-        estimates.clear();
-        oldQuery = get_string_query(query);
+    // Estimate the cardinalities for each pair
+    while(queryN.size() > 2){
 
-        // Get the estimates for all possible pairs in the tree
-        get_pairs(query, nullptr, bestTree);
+        std::vector<uint32_t> estimates;
 
-        // Use the lowest estimate to rewrite the query so that pair is a leaf pair
+        for(int i = 0; i < queryN.size() - 1; i++){
 
-        if(!estimates.empty()){
+            std::string queryPair = "(" + queryN[i] + "/" + queryN[i+1] + ")";
 
-            long min_index = std::min_element(estimates.begin(), estimates.end()) - estimates.begin();
-            RPQTree * minPair = labelPairs.at(min_index);
+            // Check if this query pair exists in the estimator cache
 
-            // replace all occurrences of + or - with escaped variants
-            std::regex rgx_Meta (R"(([\^\$\\\.\+\?\(\)\[\]\{\}\|]))");
-            std::string leftPair = std::regex_replace(get_string_query(minPair->left), rgx_Meta, R"(\$1)");
-            std::string rightPair = std::regex_replace(get_string_query(minPair->right), rgx_Meta, R"(\$1)");
+            if(estCache.find(queryPair) != estCache.end()){
 
-            std::string leftBracket = leftPair + "\\)+/" + rightPair;
-            std::string rightBracket = leftPair + "/\\(+" + rightPair;
-            std::string bothBrackets = leftPair + "\\)+/\\(+" + rightPair;
-
-            std::regex lr(leftBracket);
-            std::regex rr(rightBracket);
-            std::regex br(bothBrackets);
-
-            std::string minPairString = get_string_query(minPair);
-
-            if (std::regex_search (oldQuery, rr)){
-
-                newQuery = std::regex_replace(oldQuery, rr, "(" + minPairString);
-            }
-            else if(std::regex_search (oldQuery, lr)){
-
-                newQuery = std::regex_replace(oldQuery, lr, minPairString + ")");
-            }
-            else if(std::regex_search (oldQuery, br)){
-
-                newQuery = std::regex_replace(oldQuery, br, minPairString);
+                estimates.push_back(estCache[queryPair]);
             }
             else{
-                newQuery = oldQuery;
+
+                auto queryTree = RPQTree::strToTree(queryPair);
+                cardStat estimate = est->estimate(queryTree);
+                estimates.push_back(estimate.noPaths);
+                estCache.insert(std::make_pair(queryPair, estimate.noPaths));
             }
-
-            query = RPQTree::strToTree(newQuery);
-
-            bestTree = minPair;
         }
+
+        long min_index = std::min_element(estimates.begin(), estimates.end()) - estimates.begin();
+        std::string minPair = "(" + queryN[min_index] + "/" + queryN[min_index + 1] + ")";
+        queryN[min_index] = minPair;
+        queryN.erase(queryN.begin()+min_index+1);
     }
-    while(!estimates.empty() && newQuery != oldQuery);
+
+    if(queryN.size() == 2){
+
+        // Now concat the remaining two labels to produce an optimal tree which can be evaluated
+
+        std::string finalQuery = "(" + queryN[0] + "/" + queryN[1] + ")";
+        query = RPQTree::strToTree(finalQuery);
+    }
 
     return query;
 }
 
 cardStat SimpleEvaluator::evaluate(RPQTree *query) {
+
+    std::string queryString = get_query_as_string(query);
+
+    if(finalCache.find(queryString) != finalCache.end()){
+
+        return finalCache[queryString];
+    }
 
     if(est){
 
@@ -296,5 +267,9 @@ cardStat SimpleEvaluator::evaluate(RPQTree *query) {
     }
 
     auto res = evaluate_aux(query);
-    return SimpleEvaluator::computeStats(res);
+    auto stats = SimpleEvaluator::computeStats(res);
+
+    finalCache.insert(std::make_pair(queryString, stats));
+
+    return stats;
 }
