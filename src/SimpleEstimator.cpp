@@ -21,7 +21,7 @@ void SimpleEstimator::prepare() {
     // Create a collection of label data.
     labelData = std::vector<labelStat>();
     for(uint32_t i = 0; i < 2 * graph->getNoLabels(); i++) {
-        labelData.emplace_back(i, i % graph->getNoLabels(), i >= graph->getNoLabels(), noBins);
+        labelData.emplace_back(i, i % graph->getNoLabels(), i >= graph->getNoLabels(), graph);
     }
 
     // Do this outside of the loop, as it somehow dereferences pointers if we don't.
@@ -31,15 +31,8 @@ void SimpleEstimator::prepare() {
 
     for(uint32_t label = 0; label < graph->getNoLabels(); label++) {
         for (uint32_t vertex = 0; vertex < graph->getNoVertices(); vertex++) {
-            uint32_t degreeCount = 0;
-
-            for (const auto &target : graph->adj[label][vertex]) {
-                labelData[label].insertEdge(vertex, target);
-                degreeCount++;
-            }
-
             // Count which vertices have an out degree of one with respect to the current label.
-            if (degreeCount == 1) labelData[label].incrementSourceOut1();
+            if (graph->adj[label][vertex].size() == 1) labelData[label].incrementSourceOut1();
 
             // Count which vertices have an in degree of one with respect to the current label.
             if (graph->reverse_adj[label][vertex].size() == 1) labelData[label].incrementTargetIn1();

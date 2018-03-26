@@ -65,33 +65,41 @@ std::shared_ptr<SimpleGraph> SimpleEvaluator::join(std::shared_ptr<SimpleGraph> 
     // By using this assumption, we know that our input is always in sorted order as well.
     std::vector<uint32_t> targets;
 
-    for(uint32_t s = 0; s < left->getNoVertices(); s++) {
-        for (auto c : (*leftMatrix)[s]) {
+    // Sort over the source blocks, such that we can skip empty blocks quickly.
+    auto buckets = left->adj_ptr ? left->sources_ptr: &left->sources[0];
+    for(uint32_t i = 0; i < buckets->size(); i++) {
+        auto bucket = (*buckets)[i];
 
-            auto options = &(*rightMatrix)[c];
+        if(bucket != 0ULL) {
+            for(uint32_t s = 64 * i; s < std::min<long>(64 * (i + 1), leftMatrix->size()); s++) {
+                for (auto c : (*leftMatrix)[s]) {
 
-            // Add the entirety of _targets to the end of targets, and call an in-place merge.
-            if(!options->empty()) {
-                targets.insert(targets.end(), options->begin(), options->end());
-                std::inplace_merge(targets.begin(), targets.end() - options->size(), targets.end());
-            }
-        }
+                    auto options = &(*rightMatrix)[c];
 
-        if(!targets.empty()) {
-            // We know that the targets list is sorted, so insert without duplicates.
-            uint32_t previous = 0;
-            bool first = true;
+                    // Add the entirety of _targets to the end of targets, and call an in-place merge.
+                    if(!options->empty()) {
+                        targets.insert(targets.end(), options->begin(), options->end());
+                        std::inplace_merge(targets.begin(), targets.end() - options->size(), targets.end());
+                    }
+                }
 
-            for(auto t : targets) {
-                if (first || previous != t) {
-                    out->addEdge(s, t, 0);
+                if(!targets.empty()) {
+                    // We know that the targets list is sorted, so insert without duplicates.
+                    uint32_t previous = 0;
+                    bool first = true;
 
-                    previous = t;
-                    first = false;
+                    for(auto t : targets) {
+                        if (first || previous != t) {
+                            out->addEdge(s, t, 0);
+
+                            previous = t;
+                            first = false;
+                        }
+                    }
+
+                    targets.clear();
                 }
             }
-
-            targets.clear();
         }
     }
 

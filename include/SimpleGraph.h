@@ -54,9 +54,11 @@ public:
     std::vector<uint64_t> *sources_ptr = nullptr;
     std::vector<uint64_t> *targets_ptr = nullptr;
 
+    // The number of edges per subgraph.
+    std::vector<uint32_t> numEdges;
+
 protected:
     uint32_t V;
-    std::vector<uint32_t> numEdges;
     uint32_t E;
     uint32_t L;
 

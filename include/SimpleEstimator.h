@@ -71,8 +71,8 @@ private:
     uint32_t numEdges{};
 
     // The sources and targets of the label, encoded as a bit collection.
-    std::vector<uint64_t> sources;
-    std::vector<uint64_t> targets;
+    std::vector<uint64_t>* sources;
+    std::vector<uint64_t>* targets;
     uint32_t numSources{};
     uint32_t numTargets{};
 
@@ -81,16 +81,14 @@ private:
     uint32_t targetIn1{};
 
 public:
-
-    // The transitions, encoded as bit collections.
-    // Here, we limit the pair value to char, as it is a value of at most 64.
-    labelStat(uint32_t uid, uint32_t id, bool isInverse, unsigned long noBins) {
+    labelStat(uint32_t uid, uint32_t id, bool isInverse, std::shared_ptr<SimpleGraph> &g) {
 
         labelStat::uid = uid;
         labelStat::id = id;
         labelStat::isInverse = isInverse;
-        sources = std::vector<uint64_t>(noBins);
-        targets = std::vector<uint64_t>(noBins);
+        sources = isInverse ? &g->targets[id] : &g->sources[id];
+        targets = isInverse ? &g->sources[id] : &g->targets[id];
+        numEdges = g->numEdges[id];
     }
 
     void setTwin(labelStat* twin) {
@@ -98,21 +96,15 @@ public:
         twin->twin = this;
     }
 
-    const std::vector<uint64_t> &getSources() const { return isInverse ? twin -> getTargets() : sources; }
-    const std::vector<uint64_t> &getTargets() const { return isInverse ? twin -> getSources() : targets; }
+    std::vector<uint64_t> *getSources() const { return isInverse ? twin -> getTargets() : sources; }
+    std::vector<uint64_t> *getTargets() const { return isInverse ? twin -> getSources() : targets; }
     const uint32_t getNumSources() const { return isInverse ? twin -> getNumTargets() : numSources; }
     const uint32_t getNumTargets() const { return isInverse ? twin -> getNumSources() : numTargets; }
     const uint32_t getNumEdges() const { return isInverse ? twin -> getNumEdges() : numEdges; }
 
     void calculateSize() {
-        numSources = countBitsSet(&sources);
-        numTargets = countBitsSet(&targets);
-    }
-
-    void insertEdge(uint32_t s, uint32_t t) {
-        sources[s / 64] |= 1ULL << (s % 64);
-        targets[t / 64] |= 1ULL << (t % 64);
-        numEdges++;
+        numSources = countBitsSet(sources);
+        numTargets = countBitsSet(targets);
     }
 
     void incrementSourceOut1() {
@@ -167,9 +159,7 @@ struct joinStat {
         joinStat::source = source->uid;
         joinStat::target = target->uid;
 
-        auto targets = &source->getTargets();
-        auto sources = &target->getSources();
-        commonNodes = doAnd(&source->getTargets(), &target->getSources());
+        commonNodes = doAnd(source->getTargets(), target->getSources());
         numCommonNodes = countBitsSet(&commonNodes);
 
         // If the set of common nodes is empty, free the space of the vector.
