@@ -230,6 +230,7 @@ RPQTree * SimpleEvaluator::rewrite_query_tree(RPQTree *query) {
 
                 auto queryTree = RPQTree::strToTree(queryPair);
                 cardStat estimate = est->estimate(queryTree);
+                delete(queryTree);
                 estimates.push_back(estimate.noPaths);
                 estCache.insert(std::make_pair(queryPair, estimate.noPaths));
             }
@@ -246,7 +247,7 @@ RPQTree * SimpleEvaluator::rewrite_query_tree(RPQTree *query) {
         // Now concat the remaining two labels to produce an optimal tree which can be evaluated
 
         std::string finalQuery = "(" + queryN[0] + "/" + queryN[1] + ")";
-        query = RPQTree::strToTree(finalQuery);
+        return RPQTree::strToTree(finalQuery);
     }
 
     return query;
@@ -261,12 +262,18 @@ cardStat SimpleEvaluator::evaluate(RPQTree *query) {
         return finalCache[queryString];
     }
 
+    std::shared_ptr<SimpleGraph> res;
     if(est){
+        auto optimized_query = rewrite_query_tree(query);
+        res = evaluate_aux(optimized_query);
 
-        query = rewrite_query_tree(query);
+        if(query->isConcat()) {
+            delete(optimized_query);
+        }
+    } else {
+        res = evaluate_aux(query);
     }
 
-    auto res = evaluate_aux(query);
     auto stats = SimpleEvaluator::computeStats(res);
 
     finalCache.insert(std::make_pair(queryString, stats));
