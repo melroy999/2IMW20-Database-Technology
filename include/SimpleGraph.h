@@ -77,6 +77,7 @@ class SimpleJoinStorage {
 public:
     SimpleJoinStorage(uint32_t n, uint32_t N);
     SimpleJoinStorage(SimpleGraphStorage &storage, bool isInverse);
+    ~SimpleJoinStorage();
 
     // The adjacency list.
     std::vector<std::vector<uint32_t>*> adj;

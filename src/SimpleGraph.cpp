@@ -83,6 +83,12 @@ void SimpleJoinStorage::finalize() {
 }
 
 
+SimpleJoinStorage::~SimpleJoinStorage() {
+    for(const auto &entry : adj) {
+        delete(entry);
+    }
+}
+
 void SimpleGraphStorage::setNoVertices(uint32_t n) {
     adj.resize(n);
     reverse_adj.resize(n);
@@ -278,3 +284,4 @@ void SimpleGraph::addEdge(uint32_t from, uint32_t to, uint32_t edgeLabel) {
     throw std::runtime_error(std::string("This function is not used."));
 
 }
+
