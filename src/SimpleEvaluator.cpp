@@ -25,55 +25,49 @@ void SimpleEvaluator::prepare() {
 
 }
 
-cardStat SimpleEvaluator::computeStats(std::shared_ptr<SimpleGraph> &g) {
+cardStat SimpleEvaluator::computeStats(std::shared_ptr<SimpleJoinStorage> &g) {
 
     cardStat stats {};
 
     // Use the source and target vectors to determine the number of sources and targets.
-    stats.noOut = countBitsSet(g->adj_ptr ? g->sources_ptr : &g->sources[0]);
-    stats.noPaths = g->getNoEdges();
-    stats.noIn = countBitsSet(g->adj_ptr ? g->targets_ptr : &g->targets[0]);
+    stats.noOut = g->noSources;
+    stats.noPaths = g->noEdges;
+    stats.noIn = g->noTargets;
 
     return stats;
 }
 
-std::shared_ptr<SimpleGraph> SimpleEvaluator::project(uint32_t projectLabel, bool inverse, std::shared_ptr<SimpleGraph> &in) {
+std::shared_ptr<SimpleJoinStorage> SimpleEvaluator::project(uint32_t projectLabel, bool inverse, std::shared_ptr<SimpleGraph> &in) {
 
-    auto out = std::make_shared<SimpleGraph>(in->getNoVertices());
-
-    // Why loop here over all the data, while we can just extract the data in one sweep?
-    out->addEdges(in, projectLabel, inverse);
-
-    return out;
+    return std::make_shared<SimpleJoinStorage>(in->graphs[projectLabel], inverse);
 }
 
 
 #define CHECK_BIT(var,pos) ((var) & (1ULL<<(pos)))
 
-std::shared_ptr<SimpleGraph> SimpleEvaluator::join(std::shared_ptr<SimpleGraph> &left, std::shared_ptr<SimpleGraph> &right) {
+std::shared_ptr<SimpleJoinStorage> SimpleEvaluator::join(std::shared_ptr<SimpleJoinStorage> &left, std::shared_ptr<SimpleJoinStorage> &right) {
 
-    auto out = std::make_shared<SimpleGraph>(left->getNoVertices());
-    out->setNoLabels(1);
-    out->setDataStructureSizes(true);
+    auto out = std::make_shared<SimpleJoinStorage>(left->n, left->N);
 
-    auto leftMatrix = left->adj_ptr ? left->adj_ptr: &left->adj[0];
-    auto rightMatrix = right->adj_ptr ? right->adj_ptr: &right->adj[0];
+    auto leftMatrix = left->adj_ptr ? left->adj_ptr : &left->adj;
+    auto rightMatrix = right->adj_ptr ? right->adj_ptr : &right->adj;
 
     // We want to make sure that the result of the join is sorted in vertex order, without duplicates.
     // By using this assumption, we know that our input is always in sorted order as well.
     std::vector<uint32_t> targets;
 
     // Sort over the source blocks, such that we can skip empty blocks quickly.
-    auto buckets = left->adj_ptr ? left->sources_ptr: &left->sources[0];
-    for(uint32_t i = 0; i < buckets->size(); i++) {
+    auto buckets = left->adj_ptr ? left->sources_ptr: &left->sources;
+
+    // Use the minimal and maximal source numbers encountered as a start and end point.
+    for(uint32_t i = left->minSource >> 6; i < ceil((double) left->maxSource / 64); ++i) {
         auto bucket = (*buckets)[i];
 
         if(bucket != 0ULL) {
-            for(uint32_t s = 64 * i; s < std::min<long>(64 * (i + 1), leftMatrix->size()); s++) {
+            for(uint32_t s = 64 * i; s < std::min<long>(64 * (i + 1), leftMatrix->size()); ++s) {
 
                 if((*leftMatrix)[s]) {
                     for (auto c : *(*leftMatrix)[s]) {
-
                         std::vector<uint32_t>* options = (*rightMatrix)[c];
 
                         // Add the entirety of _targets to the end of targets, and call an in-place merge.
@@ -95,6 +89,8 @@ std::shared_ptr<SimpleGraph> SimpleEvaluator::join(std::shared_ptr<SimpleGraph> 
         }
     }
 
+    out->finalize();
+
     return out;
 }
 
@@ -102,7 +98,7 @@ std::shared_ptr<SimpleGraph> SimpleEvaluator::join(std::shared_ptr<SimpleGraph> 
 std::regex directLabel (R"((\d+)\+)");
 std::regex inverseLabel (R"((\d+)\-)");
 
-std::shared_ptr<SimpleGraph> SimpleEvaluator::evaluate_aux(RPQTree *q) {
+std::shared_ptr<SimpleJoinStorage> SimpleEvaluator::evaluate_aux(RPQTree *q) {
 
     // evaluate according to the AST bottom-up
 
@@ -141,7 +137,7 @@ std::shared_ptr<SimpleGraph> SimpleEvaluator::evaluate_aux(RPQTree *q) {
 
         // join left with right
 
-        std::shared_ptr<SimpleGraph> result = SimpleEvaluator::join(leftGraph, rightGraph);
+        std::shared_ptr<SimpleJoinStorage> result = SimpleEvaluator::join(leftGraph, rightGraph);
 
         resultsCache.insert(std::make_pair(queryString, result));
 
@@ -216,7 +212,7 @@ RPQTree * SimpleEvaluator::rewrite_query_tree(RPQTree *query) {
 
         std::vector<uint32_t> estimates;
 
-        for(int i = 0; i < queryN.size() - 1; i++){
+        for(int i = 0; i < queryN.size() - 1; ++i){
 
             std::string queryPair = "(" + queryN[i] + "/" + queryN[i+1] + ")";
 
@@ -262,7 +258,7 @@ cardStat SimpleEvaluator::evaluate(RPQTree *query) {
         return finalCache[queryString];
     }
 
-    std::shared_ptr<SimpleGraph> res;
+    std::shared_ptr<SimpleJoinStorage> res;
     if(est){
         auto optimized_query = rewrite_query_tree(query);
         res = evaluate_aux(optimized_query);

@@ -30,19 +30,16 @@ void SimpleEstimator::prepare() {
     }
 
     for(uint32_t label = 0; label < graph->getNoLabels(); label++) {
+        auto graphStorage = &graph->graphs[label];
         for (uint32_t vertex = 0; vertex < graph->getNoVertices(); vertex++) {
             // Count which vertices have an out degree of one with respect to the current label.
-            if (graph->adj[label][vertex] && graph->adj[label][vertex]->size() == 1)
+            if (graphStorage->adj[vertex] && graphStorage->adj[vertex]->size() == 1)
                 labelData[label].incrementSourceOut1();
 
             // Count which vertices have an in degree of one with respect to the current label.
-            if (graph->reverse_adj[label][vertex] && graph->reverse_adj[label][vertex]->size() == 1)
+            if (graphStorage->reverse_adj[vertex] && graphStorage->reverse_adj[vertex]->size() == 1)
                 labelData[label].incrementTargetIn1();
         }
-    }
-
-    for(uint32_t i = 0; i < graph->getNoLabels(); i++) {
-        labelData[i].calculateSize();
     }
 
     // Find all the join information.
@@ -55,6 +52,8 @@ void SimpleEstimator::prepare() {
 
     // Calculate the source and target nodes per label.
     for(auto &v : joinData) {
+        auto sourceGraphStorage = &graph->graphs[v.front().source % graph->getNoLabels()];
+
         for(auto &w : v) {
 
             // The total number of paths, and the distinct number of pairs.
@@ -74,12 +73,13 @@ void SimpleEstimator::prepare() {
                             if(CHECK_BIT(bucket, j)) {
 
                                 std::vector<uint32_t>* sourceVertices = w.source < graph->getNoLabels() ?
-                                               graph->reverse_adj[w.source % graph->getNoLabels()][i * 64 + j] :
-                                               graph->adj[w.source % graph->getNoLabels()][i * 64 + j];
+                                                                        sourceGraphStorage->reverse_adj[i * 64 + j] :
+                                                                        sourceGraphStorage->adj[i * 64 + j];
 
+                                auto targetGraphStorage = &graph->graphs[w.target % graph->getNoLabels()];
                                 std::vector<uint32_t>* targetVertices = w.target < graph->getNoLabels() ?
-                                                                        graph->adj[w.target % graph->getNoLabels()][i * 64 + j] :
-                                                                        graph->reverse_adj[w.target % graph->getNoLabels()][i * 64 + j];
+                                                                        targetGraphStorage->adj[i * 64 + j] :
+                                                                        targetGraphStorage->reverse_adj[i * 64 + j];
 
                                 if(sourceVertices && targetVertices) {
                                     int sources = 0;
@@ -127,8 +127,8 @@ void SimpleEstimator::prepare() {
             }
 
             w.numPaths = paths;
-            w.numSourceNodes = countBitsSet(&w.sourceNodes);
-            w.numTargetNodes = countBitsSet(&w.targetNodes);
+            w.numSourceNodes = countBitsSet(w.sourceNodes);
+            w.numTargetNodes = countBitsSet(w.targetNodes);
         }
     }
 }
@@ -154,9 +154,9 @@ exCardStat SimpleEstimator::estimateLeafNode(RPQTree *q) {
 
     // Report the result.
     exCardStat result = exCardStat {
-            static_cast<double>(labelData[label].getNumSources()),
-            static_cast<double>(labelData[label].getNumEdges()),
-            static_cast<double>(labelData[label].getNumTargets())
+            static_cast<double>(labelData[label].getNoSources()),
+            static_cast<double>(labelData[label].getNoEdges()),
+            static_cast<double>(labelData[label].getNoTargets())
     };
     result.vertices.push_back(label);
 
@@ -203,21 +203,21 @@ void estimateInAndOutCardinality(exCardStat* leftStat, exCardStat* rightStat, la
          * are not proceeded by the end label of the left tree.
          */
     // What is the number of edges that have been terminated and initialized during the merge?
-    uint32_t terminatedEdges = leftData->getNumEdges() - joinStat->numSourceEdges;
-    uint32_t initializedEdges = rightData->getNumEdges() - joinStat->numTargetEdges;
+    uint32_t terminatedEdges = leftData->getNoEdges() - joinStat->numSourceEdges;
+    uint32_t initializedEdges = rightData->getNoEdges() - joinStat->numTargetEdges;
 
     // What is the probability that a vertex ends up with no connected edges, when an edge gets removed?
     // In other words, what is the chance that a vertex of degree one has its edge removed?
-    double pSourceRemove = (double) leftData->getSourceOut1() / leftData->getNumEdges();
-    double pTargetRemove = (double) rightData->getTargetIn1() / rightData->getNumEdges();
+    double pSourceRemove = (double) leftData->getSourceOut1() / leftData->getNoEdges();
+    double pTargetRemove = (double) rightData->getTargetIn1() / rightData->getNoEdges();
 
     // What about higher degree edges? In certain cases we have a very low amount of degree 1 edges,
     // and should thus compensate.
 
     // So, what is the expected number of source and target vertices given the above probabilities?
     // Here we do not simply subtract, as we would risk getting negative numbers.
-    *noOut = leftStat->noOut * (1 - (pSourceRemove * terminatedEdges) / leftData->getNumSources());
-    *noIn = rightStat->noIn * (1 - (pTargetRemove * initializedEdges) / rightData->getNumTargets());
+    *noOut = leftStat->noOut * (1 - (pSourceRemove * terminatedEdges) / leftData->getNoSources());
+    *noIn = rightStat->noIn * (1 - (pTargetRemove * initializedEdges) / rightData->getNoTargets());
 }
 
 /**
@@ -265,7 +265,7 @@ exCardStat SimpleEstimator::estimateJoin(exCardStat *leftStat, exCardStat *right
 
     if(abs(leftStat->vertices.back() - rightStat->vertices.front()) == graph -> getNoLabels()) {
         // We know that at least the number of edges minus the number of source nodes are duplicates.
-        unsigned long minimumDuplicateCount = leftData->getNumEdges() - leftData->getNumSources();
+        unsigned long minimumDuplicateCount = leftData->getNoEdges() - leftData->getNoSources();
         noPaths -= minimumDuplicateCount;
     }
 

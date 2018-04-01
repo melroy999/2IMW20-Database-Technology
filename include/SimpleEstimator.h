@@ -68,13 +68,13 @@ struct labelStat {
 private:
 
     // The number of unique edges that use this label.
-    uint32_t numEdges{};
+    uint32_t noEdges{};
 
     // The sources and targets of the label, encoded as a bit collection.
     std::vector<uint64_t>* sources;
     std::vector<uint64_t>* targets;
-    uint32_t numSources{};
-    uint32_t numTargets{};
+    uint32_t noSources{};
+    uint32_t noTargets{};
 
     // The number of sources of the labelStat with source out degree 1 and target out degree 1.
     uint32_t sourceOut1{};
@@ -86,9 +86,11 @@ public:
         labelStat::uid = uid;
         labelStat::id = id;
         labelStat::isInverse = isInverse;
-        sources = isInverse ? &g->targets[id] : &g->sources[id];
-        targets = isInverse ? &g->sources[id] : &g->targets[id];
-        numEdges = g->numEdges[id];
+        sources = isInverse ? &g->graphs[id].targets : &g->graphs[id].sources;
+        targets = isInverse ? &g->graphs[id].sources : &g->graphs[id].targets;
+        noEdges = g->graphs[id].noEdges;
+        noSources = g->graphs[id].noSources;
+        noTargets = g->graphs[id].noTargets;
     }
 
     void setTwin(labelStat* twin) {
@@ -98,14 +100,9 @@ public:
 
     std::vector<uint64_t> *getSources() const { return isInverse ? twin -> getTargets() : sources; }
     std::vector<uint64_t> *getTargets() const { return isInverse ? twin -> getSources() : targets; }
-    const uint32_t getNumSources() const { return isInverse ? twin -> getNumTargets() : numSources; }
-    const uint32_t getNumTargets() const { return isInverse ? twin -> getNumSources() : numTargets; }
-    const uint32_t getNumEdges() const { return isInverse ? twin -> getNumEdges() : numEdges; }
-
-    void calculateSize() {
-        numSources = countBitsSet(sources);
-        numTargets = countBitsSet(targets);
-    }
+    const uint32_t getNoSources() const { return isInverse ? twin->getNoTargets() : noSources; }
+    const uint32_t getNoTargets() const { return isInverse ? twin->getNoSources() : noTargets; }
+    const uint32_t getNoEdges() const { return isInverse ? twin->getNoEdges() : noEdges; }
 
     void incrementSourceOut1() {
         sourceOut1++;
@@ -125,8 +122,8 @@ public:
 
     const void print() const {
         std::cout << "Label id=" << id << (isInverse ? "-" : "+") << ", uid=" << uid << ": #sources=" << std::left << std::setw(8)
-                  << getNumSources() << "#targets=" << std::setw(8) << getNumTargets() << "#edges="
-                  << std::setw(8) << getNumEdges() << "#sourceOut1=" << std::setw(8) << getSourceOut1()
+                  << getNoSources() << "#targets=" << std::setw(8) << getNoTargets() << "#edges="
+                  << std::setw(8) << getNoEdges() << "#sourceOut1=" << std::setw(8) << getSourceOut1()
                   << "#targetIn1=" << std::setw(8) << getTargetIn1() << std::endl;
     }
 };
@@ -159,8 +156,8 @@ struct joinStat {
         joinStat::source = source->uid;
         joinStat::target = target->uid;
 
-        commonNodes = doAnd(source->getTargets(), target->getSources());
-        numCommonNodes = countBitsSet(&commonNodes);
+        commonNodes = doAnd(*source->getTargets(), *target->getSources());
+        numCommonNodes = countBitsSet(commonNodes);
 
         // If the set of common nodes is empty, free the space of the vector.
         if(numCommonNodes == 0) {

@@ -140,7 +140,7 @@ int evaluatorBench(std::string &graphFile, std::string &queriesFile) {
 
     auto queries = parseQueries(queriesFile);
 
-    const uint32_t noRuns = 1;
+    const uint32_t noRuns = 100;
     for(uint32_t i = 0; i < noRuns; i++) {
         // prepare the evaluator
         auto est = std::make_shared<SimpleEstimator>(g);

@@ -5,6 +5,154 @@
 #include <cmath>
 #include "SimpleGraph.h"
 
+void SimpleJoinStorage::addEdges(uint32_t from, std::vector<uint32_t> &data, std::vector<uint32_t>::iterator &end) {
+    if(!adj[from]) {
+        adj[from] = new std::vector<uint32_t>(static_cast<unsigned long>(std::distance(data.begin(), end)));
+    }
+
+    std::copy(data.begin(), end, adj[from]->begin());
+    noEdges += adj[from]->size();
+
+    if(from < minSource) {
+        minSource = from;
+    } else if(from > maxSource) {
+        maxSource = from;
+    }
+
+    sources[from >> 6] |= SET_BIT(from & 63);
+    for(const auto to : *adj[from]) {
+        targets[to >> 6] |= SET_BIT(to & 63);
+
+//        if(to < minTarget) {
+//            minTarget = to;
+//        } else if(to > maxTarget) {
+//            maxTarget = to;
+//        }
+    }
+}
+
+void SimpleJoinStorage::setNoVertices(uint32_t n) {
+    adj.resize(n);
+}
+
+void SimpleJoinStorage::setNoBuckets(uint32_t N) {
+    sources.resize(N);
+    targets.resize(N);
+}
+
+SimpleJoinStorage::SimpleJoinStorage(uint32_t n, uint32_t N) {
+    setNoVertices(n);
+    setNoBuckets(N);
+    this->n = n;
+    this->N = N;
+    minSource = n - 1;
+    minTarget = n - 1;
+    maxSource = 0;
+    maxTarget = 0;
+}
+
+SimpleJoinStorage::SimpleJoinStorage(SimpleGraphStorage &storage, bool isInverse) {
+    noEdges = storage.noEdges;
+    n = storage.n;
+    N = storage.N;
+
+    if(isInverse) {
+        adj_ptr = &storage.reverse_adj;
+        sources_ptr = &storage.targets;
+        noSources = storage.noTargets;
+        noTargets = storage.noSources;
+        minSource = storage.minTarget;
+        maxSource = storage.maxTarget;
+        minTarget = storage.minSource;
+        maxTarget = storage.maxSource;
+    } else {
+        adj_ptr = &storage.adj;
+        sources_ptr = &storage.sources;
+        noSources = storage.noSources;
+        noTargets = storage.noTargets;
+        minTarget = storage.minTarget;
+        maxTarget = storage.maxTarget;
+        minSource = storage.minSource;
+        maxSource = storage.maxSource;
+    }
+}
+
+void SimpleJoinStorage::finalize() {
+    noSources = countBitsSet(sources);
+    noTargets = countBitsSet(targets);
+}
+
+
+void SimpleGraphStorage::setNoVertices(uint32_t n) {
+    adj.resize(n);
+    reverse_adj.resize(n);
+}
+
+void SimpleGraphStorage::setNoBuckets(uint32_t N) {
+    sources.resize(N);
+    targets.resize(N);
+}
+
+SimpleGraphStorage::SimpleGraphStorage(uint32_t n, uint32_t N) {
+    setNoVertices(n);
+    setNoBuckets(N);
+    this->n = n;
+    this->N = N;
+    minSource = n - 1;
+    minTarget = n - 1;
+    maxSource = 0;
+    maxTarget = 0;
+}
+
+void SimpleGraphStorage::finalize() {
+    noSources = countBitsSet(sources);
+    noTargets = countBitsSet(targets);
+}
+
+void SimpleGraphStorage::addEdge(uint32_t from, uint32_t to) {
+    sources[from >> 6] |= SET_BIT(from & 63);
+    targets[to >> 6] |= SET_BIT(to & 63);
+
+    ++noEdges;
+
+    if(!adj[from]) {
+        adj[from] = new std::vector<uint32_t>();
+
+        if(from < minSource) {
+            minSource = from;
+        } else if(from > maxSource) {
+            maxSource = from;
+        }
+    }
+
+    adj[from]->emplace_back(to);
+
+    if(!reverse_adj.empty()) {
+        if(!reverse_adj[to]) {
+            reverse_adj[to] = new std::vector<uint32_t>();
+
+            if(to < minTarget) {
+                minTarget = to;
+            } else if(to > maxTarget) {
+                maxTarget = to;
+            }
+        }
+
+        reverse_adj[to]->emplace_back(from);
+    }
+}
+
+SimpleGraphStorage::~SimpleGraphStorage() {
+    for(const auto &entry : adj) {
+        delete(entry);
+    }
+
+    for(const auto &entry : reverse_adj) {
+        delete(entry);
+    }
+}
+
+
 SimpleGraph::SimpleGraph(uint32_t n)   {
     setNoVertices(n);
 }
@@ -13,21 +161,10 @@ uint32_t SimpleGraph::getNoVertices() const {
     return V;
 }
 
-void SimpleGraph::setDataStructureSizes(bool isJoin) {
+void SimpleGraph::setDataStructureSizes() {
     E = 0;
-    numEdges.resize(getNoLabels());
-    sources.resize(getNoLabels(), std::vector<uint64_t>(static_cast<unsigned long>(std::ceil((double) V / 64))));
-    targets.resize(getNoLabels(), std::vector<uint64_t>(static_cast<unsigned long>(std::ceil((double) V / 64))));
-
-    adj.resize(getNoLabels());
-    for (auto &l : adj)
-        l.resize(V);
-
-    if(!isJoin) {
-        reverse_adj.resize(getNoLabels());
-        for (auto &l : reverse_adj)
-            l.resize(V);
-    }
+    auto N = static_cast<uint32_t>(std::ceil((double) V / 64));
+    graphs.resize(L, SimpleGraphStorage{V, N});
 }
 
 void SimpleGraph::setNoVertices(uint32_t n) {
@@ -48,62 +185,6 @@ uint32_t SimpleGraph::getNoLabels() const {
 
 void SimpleGraph::setNoLabels(uint32_t noLabels) {
     L = noLabels;
-}
-
-void SimpleGraph::addEdge(uint32_t from, uint32_t to, uint32_t edgeLabel) {
-    if(from >= V || to >= V || edgeLabel >= L)
-        throw std::runtime_error(std::string("Edge data out of bounds: ") +
-                                         "(" + std::to_string(from) + "," + std::to_string(to) + "," +
-                                         std::to_string(edgeLabel) + ")");
-
-    sources[edgeLabel][from/64] |= SET_BIT(from % 64);
-    targets[edgeLabel][to/64] |= SET_BIT(to % 64);
-
-    E += 1;
-    numEdges[edgeLabel] += 1;
-
-    if(!adj[edgeLabel][from]) {
-        adj[edgeLabel][from] = new std::vector<uint32_t>();
-    }
-    adj[edgeLabel][from]->emplace_back(to);
-
-    if(!reverse_adj.empty()) {
-        if(!reverse_adj[edgeLabel][to]) {
-            reverse_adj[edgeLabel][to] = new std::vector<uint32_t>();
-        }
-
-        reverse_adj[edgeLabel][to]->emplace_back(from);
-    }
-}
-
-void SimpleGraph::addEdges(uint32_t from, std::vector<uint32_t> &data, std::vector<uint32_t>::iterator &end) {
-    if(!adj[0][from]) {
-        adj[0][from] = new std::vector<uint32_t>(static_cast<unsigned long>(std::distance(data.begin(), end)));
-    }
-
-    std::copy(data.begin(), end, adj[0][from]->begin());
-    E += adj[0][from]->size();
-    numEdges[0] += adj[0][from]->size();
-
-    sources[0][from/64] |= SET_BIT(from % 64);
-    for(const auto to : *adj[0][from]) {
-        targets[0][to/64] |= SET_BIT(to % 64);
-    }
-}
-
-void SimpleGraph::addEdges(std::shared_ptr<SimpleGraph> &in, uint32_t projectLabel, bool isInverse) {
-
-    E = in->numEdges[projectLabel];
-
-    if(!isInverse) {
-        adj_ptr = &in->adj[projectLabel];
-        sources_ptr = &in->sources[projectLabel];
-        targets_ptr = &in->targets[projectLabel];
-    } else {
-        adj_ptr = &in->reverse_adj[projectLabel];
-        sources_ptr = &in->targets[projectLabel];
-        targets_ptr = &in->sources[projectLabel];
-    }
 }
 
 void SimpleGraph::readFromContiguousFile(const std::string &fileName) {
@@ -132,7 +213,7 @@ void SimpleGraph::readFromContiguousFile(const std::string &fileName) {
 
     setNoLabels(noLabels);
     setNoVertices(noNodes);
-    setDataStructureSizes(false);
+    setDataStructureSizes();
 
     std::vector<std::tuple<uint32_t, uint32_t, uint32_t>> edges;
     edges.reserve(noEdges);
@@ -157,11 +238,17 @@ void SimpleGraph::readFromContiguousFile(const std::string &fileName) {
     uint32_t lastSource = 0;
     uint32_t lastTarget = 0;
     uint32_t lastLabel = 0;
+    SimpleGraphStorage *storage = nullptr;
 
     for(auto const &tuple : edges) {
         uint32_t source = std::get<1>(tuple);
         uint32_t target = std::get<2>(tuple);
         uint32_t label = std::get<0>(tuple);
+
+        if(first || lastLabel != label) {
+            // get the current storage block we are looking at.
+            storage = &graphs[label];
+        }
 
         if(first || !(lastSource == source && lastTarget == target && lastLabel == label)) {
             first = false;
@@ -169,32 +256,25 @@ void SimpleGraph::readFromContiguousFile(const std::string &fileName) {
             lastTarget = target;
             lastLabel = label;
 
-            addEdge(source, target, label);
+            storage->addEdge(source, target);
         }
     }
 
     // For the leaf level, we want the reverse adjacency to be sorted as well.
-    for(auto &adj_list : reverse_adj) {
-        for(auto vertices : adj_list) {
+    for(auto &graph : graphs) {
+        for(auto &vertices : graph.reverse_adj) {
             if(vertices) {
                 std::sort(vertices->begin(), vertices->end());
             }
         }
+        graph.finalize();
     }
 
     file.close();
 }
 
-SimpleGraph::~SimpleGraph() {
-    for(const auto &matrix : adj) {
-        for(const auto &v : matrix) {
-            delete v;
-        }
-    }
+void SimpleGraph::addEdge(uint32_t from, uint32_t to, uint32_t edgeLabel) {
+    // We don't use this.
+    throw std::runtime_error(std::string("This function is not used."));
 
-    for(const auto &matrix : reverse_adj) {
-        for(const auto &v : matrix) {
-            delete v;
-        }
-    }
 }
