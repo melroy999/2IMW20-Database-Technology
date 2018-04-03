@@ -126,18 +126,6 @@ void SimpleGraph::readFromContiguousFile(const std::string &fileName) {
 
             if(first || !(x == px && y == py)) {
 
-//                std::cout << std::bitset<8>(entryHelper) << std::endl;
-//                for(uint32_t k = 0; k < 64; k += 8) {
-//                    std::cout << std::bitset<8>(v >> k) << std::endl;
-//                }
-//                std::cout << std::endl;
-//
-//                std::cout << std::bitset<8>(entryHelper >> 8) << std::endl;
-//                for(uint32_t k = 0; k < 64; k += 8) {
-//                    std::cout << std::bitset<8>(w >> k) << std::endl;
-//                }
-//                std::cout << std::endl;
-
                 // Add the block to the graph.
                 graph->addEdge(px, py, {py, entryHelper, v}, {px, (entryHelper >> 8) | ((entryHelper & 255) << 8), w});
 
@@ -164,7 +152,7 @@ void SimpleGraph::readFromContiguousFile(const std::string &fileName) {
         }
 
         // Flush the remaining data.
-        graph->addEdge(px, py, {py, entryHelper, v}, {px, (entryHelper << 8) | ((entryHelper & 255) >> 8), w});
+        graph->addEdge(px, py, {py, entryHelper, v}, {px, (entryHelper >> 8) | ((entryHelper & 255) << 8), w});
 
         // Finalize the graph.
         graph->finalize();
