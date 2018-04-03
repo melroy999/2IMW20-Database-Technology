@@ -5,6 +5,9 @@
 #ifndef QS_SIMPLEEVALUATOR_H
 #define QS_SIMPLEEVALUATOR_H
 
+// #define EST_CACHE
+// #define FINAL_CACHE
+// #define RESULTS_CACHE
 
 #include <memory>
 #include <cmath>
@@ -17,9 +20,16 @@ class SimpleEvaluator : public Evaluator {
 
     std::shared_ptr<SimpleGraph> graph;
     std::shared_ptr<SimpleEstimator> est;
+
+    #ifdef EST_CACHE
     std::map<std::string, uint32_t> estCache;
+    #endif
+    #ifdef FINAL_CACHE
     std::map<std::string, cardStat> finalCache;
+    #endif
+    #ifdef RESULTS_CACHE
     std::map<std::string, std::shared_ptr<SimpleGraph>> resultsCache;
+    #endif
 
 public:
 

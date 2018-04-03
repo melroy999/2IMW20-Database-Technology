@@ -130,10 +130,12 @@ std::shared_ptr<SimpleGraph> SimpleEvaluator::evaluate_aux(RPQTree *q) {
 
         std::string queryString = get_query_as_string(q);
 
+        #ifdef RESULTS_CACHE
         if(resultsCache.find(queryString) != resultsCache.end()){
 
             return resultsCache[queryString];
         }
+        #endif
 
         // evaluate the children
         auto leftGraph = SimpleEvaluator::evaluate_aux(q->left);
@@ -143,7 +145,9 @@ std::shared_ptr<SimpleGraph> SimpleEvaluator::evaluate_aux(RPQTree *q) {
 
         std::shared_ptr<SimpleGraph> result = SimpleEvaluator::join(leftGraph, rightGraph);
 
+        #ifdef RESULTS_CACHE
         resultsCache.insert(std::make_pair(queryString, result));
+        #endif
 
         return result;
     }
@@ -222,18 +226,22 @@ RPQTree * SimpleEvaluator::rewrite_query_tree(RPQTree *query) {
 
             // Check if this query pair exists in the estimator cache
 
+            #ifdef EST_CACHE
             if(estCache.find(queryPair) != estCache.end()){
 
                 estimates.push_back(estCache[queryPair]);
             }
             else{
-
+            #endif
                 auto queryTree = RPQTree::strToTree(queryPair);
                 cardStat estimate = est->estimate(queryTree);
                 delete(queryTree);
                 estimates.push_back(estimate.noPaths);
+
+            #ifdef EST_CACHE
                 estCache.insert(std::make_pair(queryPair, estimate.noPaths));
             }
+            #endif
         }
 
         long min_index = std::min_element(estimates.begin(), estimates.end()) - estimates.begin();
@@ -257,10 +265,12 @@ cardStat SimpleEvaluator::evaluate(RPQTree *query) {
 
     std::string queryString = get_query_as_string(query);
 
+    #ifdef FINAL_CACHE
     if(finalCache.find(queryString) != finalCache.end()){
 
         return finalCache[queryString];
     }
+    #endif
 
     std::shared_ptr<SimpleGraph> res;
     if(est){
@@ -276,7 +286,9 @@ cardStat SimpleEvaluator::evaluate(RPQTree *query) {
 
     auto stats = SimpleEvaluator::computeStats(res);
 
+    #ifdef FINAL_CACHE
     finalCache.insert(std::make_pair(queryString, stats));
+    #endif
 
     return stats;
 }
