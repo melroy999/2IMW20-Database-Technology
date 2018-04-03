@@ -13,32 +13,11 @@ uint32_t SimpleGraph::getNoVertices() const {
     return V;
 }
 
-void SimpleGraph::setDataStructureSizes(bool isJoin) {
-    E = 0;
-    numEdges.resize(getNoLabels());
-    sources.resize(getNoLabels(), std::vector<uint64_t>(static_cast<unsigned long>(std::ceil((double) V / 64))));
-    targets.resize(getNoLabels(), std::vector<uint64_t>(static_cast<unsigned long>(std::ceil((double) V / 64))));
-
-    adj.resize(getNoLabels());
-    for (auto &l : adj)
-        l.resize(V);
-
-    if(!isJoin) {
-        reverse_adj.resize(getNoLabels());
-        for (auto &l : reverse_adj)
-            l.resize(V);
-    }
-}
-
 void SimpleGraph::setNoVertices(uint32_t n) {
     V = n;
 }
 
 uint32_t SimpleGraph::getNoEdges() const {
-    return E;
-}
-
-uint32_t SimpleGraph::getNoDistinctEdges() const {
     return E;
 }
 
@@ -48,62 +27,7 @@ uint32_t SimpleGraph::getNoLabels() const {
 
 void SimpleGraph::setNoLabels(uint32_t noLabels) {
     L = noLabels;
-}
-
-void SimpleGraph::addEdge(uint32_t from, uint32_t to, uint32_t edgeLabel) {
-    if(from >= V || to >= V || edgeLabel >= L)
-        throw std::runtime_error(std::string("Edge data out of bounds: ") +
-                                         "(" + std::to_string(from) + "," + std::to_string(to) + "," +
-                                         std::to_string(edgeLabel) + ")");
-
-    sources[edgeLabel][from/64] |= SET_BIT(from % 64);
-    targets[edgeLabel][to/64] |= SET_BIT(to % 64);
-
-    E += 1;
-    numEdges[edgeLabel] += 1;
-
-    if(!adj[edgeLabel][from]) {
-        adj[edgeLabel][from] = new std::vector<uint32_t>();
-    }
-    adj[edgeLabel][from]->emplace_back(to);
-
-    if(!reverse_adj.empty()) {
-        if(!reverse_adj[edgeLabel][to]) {
-            reverse_adj[edgeLabel][to] = new std::vector<uint32_t>();
-        }
-
-        reverse_adj[edgeLabel][to]->emplace_back(from);
-    }
-}
-
-void SimpleGraph::addEdges(uint32_t from, std::vector<uint32_t> &data, std::vector<uint32_t>::iterator &end) {
-    if(!adj[0][from]) {
-        adj[0][from] = new std::vector<uint32_t>(static_cast<unsigned long>(std::distance(data.begin(), end)));
-    }
-
-    std::copy(data.begin(), end, adj[0][from]->begin());
-    E += adj[0][from]->size();
-    numEdges[0] += adj[0][from]->size();
-
-    sources[0][from/64] |= SET_BIT(from % 64);
-    for(const auto to : *adj[0][from]) {
-        targets[0][to/64] |= SET_BIT(to % 64);
-    }
-}
-
-void SimpleGraph::addEdges(std::shared_ptr<SimpleGraph> &in, uint32_t projectLabel, bool isInverse) {
-
-    E = in->numEdges[projectLabel];
-
-    if(!isInverse) {
-        adj_ptr = &in->adj[projectLabel];
-        sources_ptr = &in->sources[projectLabel];
-        targets_ptr = &in->targets[projectLabel];
-    } else {
-        adj_ptr = &in->reverse_adj[projectLabel];
-        sources_ptr = &in->targets[projectLabel];
-        targets_ptr = &in->sources[projectLabel];
-    }
+    graphs.resize(noLabels);
 }
 
 void SimpleGraph::readFromContiguousFile(const std::string &fileName) {
@@ -115,29 +39,28 @@ void SimpleGraph::readFromContiguousFile(const std::string &fileName) {
 
     std::istringstream iss(graphStructure);
     std::string line;
-    uint32_t noNodes = 0;
-    uint32_t noEdges = 0;
-    uint32_t noLabels = 0;
+    uint32_t V = 0;
+    uint32_t E = 0;
+    uint32_t L = 0;
     int j = 0;
     while(std::getline(iss, line, ',')) {
         if(j == 0) {
-            noNodes = (uint32_t) std::stoul(line);
+            V = (uint32_t) std::stoul(line);
         }  else if(j == 1) {
-            noEdges = (uint32_t) std::stoul(line);
+            E = (uint32_t) std::stoul(line);
         } else if(j == 2) {
-            noLabels = (uint32_t) std::stoul(line);
+            L = (uint32_t) std::stoul(line);
         }
         j++;
     }
 
-    setNoLabels(noLabels);
-    setNoVertices(noNodes);
-    setDataStructureSizes(false);
+    setNoLabels(L);
+    setNoVertices(V);
 
     std::vector<std::tuple<uint32_t, uint32_t, uint32_t>> edges;
-    edges.reserve(noEdges);
+    edges.reserve(E);
 
-    for(int i = 0; i < noEdges; i++) {
+    for(int i = 0; i < E; i++) {
         uint32_t subject, predicate, object;
 
         file >> subject >> predicate >> object;
@@ -148,53 +71,121 @@ void SimpleGraph::readFromContiguousFile(const std::string &fileName) {
     }
 
     // Sort the vector.
-    std::sort(edges.begin(), edges.end());
+    sort(edges.begin(), edges.end(),
+         [](
+                 const std::tuple<uint32_t, uint32_t, uint32_t> &a,
+                 const std::tuple<uint32_t, uint32_t, uint32_t> &b
+         ) -> bool {
+             // The order in the tuple is label, source, target.
+             if(std::get<0>(a) < std::get<0>(b)) {
+                 return true;
+             } else if(std::get<0>(a) == std::get<0>(b)) {
+                 // Find which block each vertex belongs to.
+                 if((std::get<1>(a) >> 3) < (std::get<1>(b) >> 3)) {
+                     // A is in a previous row.
+                     return true;
+                 } else if((std::get<1>(a) >> 3) == (std::get<1>(b) >> 3)) {
+                     // Check if a is in a earlier column than b.
+                     return (std::get<2>(a) >> 3) < (std::get<2>(b) >> 3);
+                 }
+             }
+             return false;
+         });
 
-    // Add the edges in sorted order, do not add duplicates.
-    std::tuple<uint32_t, uint32_t, uint32_t> lastTuple;
+    // Remove the duplicates.
+    edges.erase(std::unique(edges.begin(), edges.end()), edges.end());
 
-    bool first = true;
-    uint32_t lastSource = 0;
-    uint32_t lastTarget = 0;
-    uint32_t lastLabel = 0;
+    // The starting point of our iterations, and the end point.
+    std::vector<std::tuple<uint32_t, uint32_t, uint32_t>>::iterator start;
+    auto end = edges.begin();
 
-    for(auto const &tuple : edges) {
-        uint32_t source = std::get<1>(tuple);
-        uint32_t target = std::get<2>(tuple);
-        uint32_t label = std::get<0>(tuple);
+    // For each of the labels, do the insertions.
+    for(uint32_t i = 0; i < L; i++) {
+        // Get the set of iterators.
+        start = end;
+        end = std::find_if(start, edges.end(), [&i] (const std::tuple<uint32_t, uint32_t, uint32_t> &a) { return std::get<0>(a) == i + 1; });
 
-        if(first || !(lastSource == source && lastTarget == target && lastLabel == label)) {
-            first = false;
-            lastSource = source;
-            lastTarget = target;
-            lastLabel = label;
+        // The current block graph.
+        BlockGraph* graph = &graphs[i];
+        graph->setDataStructureSizes(V);
 
-            addEdge(source, target, label);
+        // The current block x and y starting positions.
+        uint32_t px = 0;
+        uint32_t py = 0;
+        uint64_t v = 0ULL;
+        uint64_t w = 0ULL;
+        uint32_t entryHelper = 0;
+        bool first = true;
+
+        // Continue until we end up at another label.
+        while(start != end) {
+
+            // Which block is the pair in?
+            uint32_t x = (std::get<1>(*start) >> 3);
+            uint32_t y = (std::get<2>(*start) >> 3);
+
+            if(first || !(x == px && y == py)) {
+
+//                std::cout << std::bitset<8>(entryHelper) << std::endl;
+//                for(uint32_t k = 0; k < 64; k += 8) {
+//                    std::cout << std::bitset<8>(v >> k) << std::endl;
+//                }
+//                std::cout << std::endl;
+//
+//                std::cout << std::bitset<8>(entryHelper >> 8) << std::endl;
+//                for(uint32_t k = 0; k < 64; k += 8) {
+//                    std::cout << std::bitset<8>(w >> k) << std::endl;
+//                }
+//                std::cout << std::endl;
+
+                // Add the block to the graph.
+                graph->addEdge(px, py, {py, entryHelper, v}, {px, (entryHelper >> 8) | ((entryHelper & 63) << 8), w});
+
+                // Set new previous values.
+                px = x;
+                py = y;
+                first = false;
+
+                // Reset the data.
+                v = 0ULL;
+                w = 0ULL;
+                entryHelper = 0;
+            }
+
+            // A set of bits denoting whether a row or column has values.
+            // TODO these calculations seem to be correct
+            entryHelper |= SET_BIT(std::get<1>(*start) & 7);
+            entryHelper |= SET_BIT(8 + (std::get<2>(*start) & 7));
+
+            // Set the bit in v.
+            v |= SET_BIT(8 * (std::get<1>(*start) & 7) + (std::get<2>(*start) & 7));
+            w |= SET_BIT(8 * (std::get<2>(*start) & 7) + (std::get<1>(*start) & 7));
+
+            start++;
         }
+
+        // Flush the remaining data.
+        graph->addEdge(px, py, {py, entryHelper, v}, {px, (entryHelper << 8) | ((entryHelper & 63) >> 8), w});
+
+        // Finalize the graph.
+        graph->finalize();
     }
 
-    // For the leaf level, we want the reverse adjacency to be sorted as well.
-    for(auto &adj_list : reverse_adj) {
-        for(auto vertices : adj_list) {
+    // Sort each of the blocks in the reverse adjacency list on i coordinate.
+    for(auto &g : graphs) {
+        for(auto &vertices : g.reverse_adj) {
             if(vertices) {
-                std::sort(vertices->begin(), vertices->end());
+                std::sort(vertices->begin(), vertices->end(), [](const Entry &a, const Entry b) -> bool {
+                    return a.i < b.i;
+                });
             }
         }
     }
 
+    for(uint32_t i = 0; i < L; i++) {
+        graphs[i].reportData(i);
+    }
+
+    // Close the file, as we are done.
     file.close();
-}
-
-SimpleGraph::~SimpleGraph() {
-    for(const auto &matrix : adj) {
-        for(const auto &v : matrix) {
-            delete v;
-        }
-    }
-
-    for(const auto &matrix : reverse_adj) {
-        for(const auto &v : matrix) {
-            delete v;
-        }
-    }
 }

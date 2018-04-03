@@ -86,9 +86,9 @@ public:
         labelStat::uid = uid;
         labelStat::id = id;
         labelStat::isInverse = isInverse;
-        sources = isInverse ? &g->targets[id] : &g->sources[id];
-        targets = isInverse ? &g->sources[id] : &g->targets[id];
-        numEdges = g->numEdges[id];
+//        sources = isInverse ? &g->targets[id] : &g->sources[id];
+//        targets = isInverse ? &g->sources[id] : &g->targets[id];
+//        numEdges = g->numEdges[id];
     }
 
     void setTwin(labelStat* twin) {
@@ -103,8 +103,8 @@ public:
     const uint32_t getNumEdges() const { return isInverse ? twin -> getNumEdges() : numEdges; }
 
     void calculateSize() {
-        numSources = countBitsSet(sources);
-        numTargets = countBitsSet(targets);
+//        numSources = countBitsSet(sources);
+//        numTargets = countBitsSet(targets);
     }
 
     void incrementSourceOut1() {
@@ -159,8 +159,8 @@ struct joinStat {
         joinStat::source = source->uid;
         joinStat::target = target->uid;
 
-        commonNodes = doAnd(source->getTargets(), target->getSources());
-        numCommonNodes = countBitsSet(&commonNodes);
+//        commonNodes = doAnd(source->getTargets(), target->getSources());
+//        numCommonNodes = countBitsSet(&commonNodes);
 
         // If the set of common nodes is empty, free the space of the vector.
         if(numCommonNodes == 0) {

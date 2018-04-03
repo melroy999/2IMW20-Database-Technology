@@ -5,9 +5,9 @@
 #ifndef QS_SIMPLEEVALUATOR_H
 #define QS_SIMPLEEVALUATOR_H
 
-#define EST_CACHE
-#define FINAL_CACHE
-#define RESULTS_CACHE
+// #define EST_CACHE
+// #define FINAL_CACHE
+// #define RESULTS_CACHE
 
 #include <memory>
 #include <cmath>

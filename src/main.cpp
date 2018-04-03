@@ -134,7 +134,7 @@ int evaluatorBench(std::string &graphFile, std::string &queriesFile) {
     auto end = std::chrono::steady_clock::now();
     std::cout << "Time to read the graph into memory: " << std::chrono::duration<double, std::milli>(end - start).count() << " ms" << std::endl;
 
-
+    exit(666);
 
     double totalTime = 0;
 

@@ -12,125 +12,125 @@ SimpleEstimator::SimpleEstimator(std::shared_ptr<SimpleGraph> &g){
 
 void SimpleEstimator::prepare() {
 
-    // The number of bits we need to store all the vertices.
-    auto noBins = static_cast<unsigned long>(ceil((double) graph->getNoVertices() / 64));
-
-    // Resize the join data matrix.
-    joinData.resize(2 * graph->getNoLabels(), std::vector<joinStat>(2 * graph->getNoLabels()));
-
-    // Create a collection of label data.
-    labelData = std::vector<labelStat>();
-    for(uint32_t i = 0; i < 2 * graph->getNoLabels(); i++) {
-        labelData.emplace_back(i, i % graph->getNoLabels(), i >= graph->getNoLabels(), graph);
-    }
-
-    // Do this outside of the loop, as it somehow dereferences pointers if we don't.
-    for(uint32_t i = 0; i < graph->getNoLabels(); i++) {
-        labelData[i + graph->getNoLabels()].setTwin(&labelData[i]);
-    }
-
-    for(uint32_t label = 0; label < graph->getNoLabels(); label++) {
-        for (uint32_t vertex = 0; vertex < graph->getNoVertices(); vertex++) {
-            // Count which vertices have an out degree of one with respect to the current label.
-            if (graph->adj[label][vertex] && graph->adj[label][vertex]->size() == 1)
-                labelData[label].incrementSourceOut1();
-
-            // Count which vertices have an in degree of one with respect to the current label.
-            if (graph->reverse_adj[label][vertex] && graph->reverse_adj[label][vertex]->size() == 1)
-                labelData[label].incrementTargetIn1();
-        }
-    }
-
-    for(uint32_t i = 0; i < graph->getNoLabels(); i++) {
-        labelData[i].calculateSize();
-    }
-
-    // Find all the join information.
-    // Here, joining the labels i and j should correspond to inv(j), inv(i).
-    for(uint32_t i = 0; i < 2 * graph->getNoLabels(); i++) {
-        for(uint32_t j = 0; j < 2 * graph->getNoLabels(); j++) {
-            joinData[i][j].join(&labelData[i], &labelData[j]);
-        }
-    }
-
-    // Calculate the source and target nodes per label.
-    for(auto &v : joinData) {
-        for(auto &w : v) {
-
-            // The total number of paths, and the distinct number of pairs.
-            uint32_t paths = 0;
-
-            // We dont want to waste time on joins without any edges.
-            if(w.numCommonNodes != 0) {
-
-                // Change the bucket size of the source and target collections to fit all the vertices.
-                w.changeBucketSize(noBins);
-
-                for(uint32_t i = 0; i < w.commonNodes.size(); i++) {
-                    auto bucket = w.commonNodes[i];
-
-                    if(bucket != 0ULL) {
-                        for(uint32_t j = 0; j < 64; j++) {
-                            if(CHECK_BIT(bucket, j)) {
-
-                                std::vector<uint32_t>* sourceVertices = w.source < graph->getNoLabels() ?
-                                               graph->reverse_adj[w.source % graph->getNoLabels()][i * 64 + j] :
-                                               graph->adj[w.source % graph->getNoLabels()][i * 64 + j];
-
-                                std::vector<uint32_t>* targetVertices = w.target < graph->getNoLabels() ?
-                                                                        graph->adj[w.target % graph->getNoLabels()][i * 64 + j] :
-                                                                        graph->reverse_adj[w.target % graph->getNoLabels()][i * 64 + j];
-
-                                if(sourceVertices && targetVertices) {
-                                    int sources = 0;
-
-                                    // Filter out duplicates.
-                                    uint32_t prevTarget = 0;
-                                    bool first = true;
-
-                                    for(const auto &target : *sourceVertices)
-                                    {
-                                        if (first || prevTarget != target) {
-                                            w.sourceNodes[target / 64] |= SET_BIT(target);
-                                            sources++;
-                                            w.numSourceEdges++;
-
-                                            first = false;
-                                            prevTarget = target;
-                                        }
-                                    }
-
-                                    prevTarget = 0;
-                                    first = true;
-
-                                    int targets = 0;
-                                    for(const auto &target : *targetVertices)
-                                    {
-                                        if (first || prevTarget != target) {
-                                            w.targetNodes[target / 64] |= SET_BIT(target);
-                                            targets++;
-                                            w.numTargetEdges++;
-
-                                            first = false;
-                                            prevTarget = target;
-                                        }
-                                    }
-
-                                    paths += sources * targets;
-                                }
-
-
-                            }
-                        }
-                    }
-                }
-            }
-
-            w.numPaths = paths;
-            w.numSourceNodes = countBitsSet(&w.sourceNodes);
-            w.numTargetNodes = countBitsSet(&w.targetNodes);
-        }
-    }
+//    // The number of bits we need to store all the vertices.
+//    auto noBins = static_cast<unsigned long>(ceil((double) graph->getNoVertices() / 64));
+//
+//    // Resize the join data matrix.
+//    joinData.resize(2 * graph->getNoLabels(), std::vector<joinStat>(2 * graph->getNoLabels()));
+//
+//    // Create a collection of label data.
+//    labelData = std::vector<labelStat>();
+//    for(uint32_t i = 0; i < 2 * graph->getNoLabels(); i++) {
+//        labelData.emplace_back(i, i % graph->getNoLabels(), i >= graph->getNoLabels(), graph);
+//    }
+//
+//    // Do this outside of the loop, as it somehow dereferences pointers if we don't.
+//    for(uint32_t i = 0; i < graph->getNoLabels(); i++) {
+//        labelData[i + graph->getNoLabels()].setTwin(&labelData[i]);
+//    }
+//
+//    for(uint32_t label = 0; label < graph->getNoLabels(); label++) {
+//        for (uint32_t vertex = 0; vertex < graph->getNoVertices(); vertex++) {
+//            // Count which vertices have an out degree of one with respect to the current label.
+//            if (graph->adj[label][vertex] && graph->adj[label][vertex]->size() == 1)
+//                labelData[label].incrementSourceOut1();
+//
+//            // Count which vertices have an in degree of one with respect to the current label.
+//            if (graph->reverse_adj[label][vertex] && graph->reverse_adj[label][vertex]->size() == 1)
+//                labelData[label].incrementTargetIn1();
+//        }
+//    }
+//
+//    for(uint32_t i = 0; i < graph->getNoLabels(); i++) {
+//        labelData[i].calculateSize();
+//    }
+//
+//    // Find all the join information.
+//    // Here, joining the labels i and j should correspond to inv(j), inv(i).
+//    for(uint32_t i = 0; i < 2 * graph->getNoLabels(); i++) {
+//        for(uint32_t j = 0; j < 2 * graph->getNoLabels(); j++) {
+//            joinData[i][j].join(&labelData[i], &labelData[j]);
+//        }
+//    }
+//
+//    // Calculate the source and target nodes per label.
+//    for(auto &v : joinData) {
+//        for(auto &w : v) {
+//
+//            // The total number of paths, and the distinct number of pairs.
+//            uint32_t paths = 0;
+//
+//            // We dont want to waste time on joins without any edges.
+//            if(w.numCommonNodes != 0) {
+//
+//                // Change the bucket size of the source and target collections to fit all the vertices.
+//                w.changeBucketSize(noBins);
+//
+//                for(uint32_t i = 0; i < w.commonNodes.size(); i++) {
+//                    auto bucket = w.commonNodes[i];
+//
+//                    if(bucket != 0ULL) {
+//                        for(uint32_t j = 0; j < 64; j++) {
+//                            if(CHECK_BIT(bucket, j)) {
+//
+//                                std::vector<uint32_t>* sourceVertices = w.source < graph->getNoLabels() ?
+//                                               graph->reverse_adj[w.source % graph->getNoLabels()][i * 64 + j] :
+//                                               graph->adj[w.source % graph->getNoLabels()][i * 64 + j];
+//
+//                                std::vector<uint32_t>* targetVertices = w.target < graph->getNoLabels() ?
+//                                                                        graph->adj[w.target % graph->getNoLabels()][i * 64 + j] :
+//                                                                        graph->reverse_adj[w.target % graph->getNoLabels()][i * 64 + j];
+//
+//                                if(sourceVertices && targetVertices) {
+//                                    int sources = 0;
+//
+//                                    // Filter out duplicates.
+//                                    uint32_t prevTarget = 0;
+//                                    bool first = true;
+//
+//                                    for(const auto &target : *sourceVertices)
+//                                    {
+//                                        if (first || prevTarget != target) {
+//                                            w.sourceNodes[target / 64] |= SET_BIT(target);
+//                                            sources++;
+//                                            w.numSourceEdges++;
+//
+//                                            first = false;
+//                                            prevTarget = target;
+//                                        }
+//                                    }
+//
+//                                    prevTarget = 0;
+//                                    first = true;
+//
+//                                    int targets = 0;
+//                                    for(const auto &target : *targetVertices)
+//                                    {
+//                                        if (first || prevTarget != target) {
+//                                            w.targetNodes[target / 64] |= SET_BIT(target);
+//                                            targets++;
+//                                            w.numTargetEdges++;
+//
+//                                            first = false;
+//                                            prevTarget = target;
+//                                        }
+//                                    }
+//
+//                                    paths += sources * targets;
+//                                }
+//
+//
+//                            }
+//                        }
+//                    }
+//                }
+//            }
+//
+//            w.numPaths = paths;
+//            w.numSourceNodes = countBitsSet(&w.sourceNodes);
+//            w.numTargetNodes = countBitsSet(&w.targetNodes);
+//        }
+//    }
 }
 
 cardStat SimpleEstimator::estimate(RPQTree *q) {
