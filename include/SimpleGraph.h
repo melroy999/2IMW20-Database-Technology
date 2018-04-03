@@ -79,13 +79,9 @@ struct BlockGraph {
 
             // Enable the bits of the sources and targets.
             // Note that i >> 3 == (i << 3) >> 6.
-            // Isolate the first 8 bits,
-            uint64_t xmask = uint64_t(x.masks) & 63;
-            uint64_t ymask = uint64_t(y.masks) & 63;
-            uint32_t sh = (8 * (i & 7));
-            uint32_t sk = (8 * (j & 7));
-            sources[i >> 3] |= xmask << (8 * (i & 7));
-            targets[j >> 3] |= ymask << (8 * (j & 7));
+            // Isolate the first 8 bits, and shift to the appropriate spot.
+            sources[i >> 3] |= (uint64_t(x.masks) & 255) << (8 * (i & 7));
+            targets[j >> 3] |= (uint64_t(y.masks) & 255) << (8 * (j & 7));
 
             // Increment the number of edges.
             noEdges += __builtin_popcountll(x.v);

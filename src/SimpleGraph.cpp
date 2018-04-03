@@ -139,7 +139,7 @@ void SimpleGraph::readFromContiguousFile(const std::string &fileName) {
 //                std::cout << std::endl;
 
                 // Add the block to the graph.
-                graph->addEdge(px, py, {py, entryHelper, v}, {px, (entryHelper >> 8) | ((entryHelper & 63) << 8), w});
+                graph->addEdge(px, py, {py, entryHelper, v}, {px, (entryHelper >> 8) | ((entryHelper & 255) << 8), w});
 
                 // Set new previous values.
                 px = x;
@@ -153,7 +153,6 @@ void SimpleGraph::readFromContiguousFile(const std::string &fileName) {
             }
 
             // A set of bits denoting whether a row or column has values.
-            // TODO these calculations seem to be correct
             entryHelper |= SET_BIT(std::get<1>(*start) & 7);
             entryHelper |= SET_BIT(8 + (std::get<2>(*start) & 7));
 
@@ -165,7 +164,7 @@ void SimpleGraph::readFromContiguousFile(const std::string &fileName) {
         }
 
         // Flush the remaining data.
-        graph->addEdge(px, py, {py, entryHelper, v}, {px, (entryHelper << 8) | ((entryHelper & 63) >> 8), w});
+        graph->addEdge(px, py, {py, entryHelper, v}, {px, (entryHelper << 8) | ((entryHelper & 255) >> 8), w});
 
         // Finalize the graph.
         graph->finalize();
