@@ -42,6 +42,10 @@ struct Entry {
     uint32_t i;
     uint32_t masks;
     uint64_t v;
+
+    bool operator<(const Entry& rhs) const {
+        return i < rhs.i;
+    }
 };
 
 struct BlockGraph {
@@ -119,6 +123,7 @@ struct BlockGraph {
         std::cout << "\t - |S| = " << noSources << std::endl;
         std::cout << "\t - |T| = " << noTargets << std::endl;
         std::cout << "\t - |E| = " << noEdges << std::endl;
+        std::cout << "\t - memory = " << getSizeInBytes() << std::endl;
     }
 
     virtual ~BlockGraph() {
@@ -127,6 +132,244 @@ struct BlockGraph {
         }
 
         for(const auto &v : reverse_adj) {
+            delete(v);
+        }
+    }
+};
+
+/**
+ * A join graph, which holds resulting joins/projections.
+ */
+struct JoinGraph {
+    // The adjacency list for this graph.
+    std::vector<std::vector<Entry>*> adj;
+
+    // The sources and targets of the graph, represented as a bitmap for each individual label.
+    std::vector<uint64_t> sources;
+    std::vector<uint64_t> targets;
+
+    // Pointers to an adjacency list and sources bitmap used in projections.
+    std::vector<std::vector<Entry>*>* adj_ptr = nullptr;
+    std::vector<uint64_t>* sources_ptr = nullptr;
+
+    // The number of sources, targets and edges.
+    uint32_t noSources{};
+    uint32_t noTargets{};
+    uint32_t noEdges{};
+
+    /**
+     * Constructor used to create a projection of the specified blockGraph.
+     * @param g The graph to copy the structure from.
+     * @param isInverse Whether we want to take the inverse.
+     */
+    explicit JoinGraph(BlockGraph &g, bool isInverse) {
+        if(!isInverse) {
+            adj_ptr = &g.adj;
+            sources_ptr = &g.sources;
+            noSources = g.noSources;
+            noTargets = g.noTargets;
+        } else {
+            adj_ptr = &g.reverse_adj;
+            sources_ptr = &g.targets;
+            noSources = g.noTargets;
+            noTargets = g.noSources;
+        }
+
+        noEdges = g.noEdges;
+    }
+
+    /**
+     * Constructor used during join operations.
+     * @param left The left side of the join.
+     * @param right The right side of the join.
+     */
+    JoinGraph(JoinGraph &left, JoinGraph &right) {
+        adj = std::vector<std::vector<Entry>*>(left.adj_ptr ? left.adj_ptr->size() : left.adj.size());
+        sources.resize(left.sources_ptr ? left.sources_ptr->size() : left.sources.size());
+        targets.resize(left.sources_ptr ? left.sources_ptr->size() : left.sources.size());
+
+        // Instead of doing the join in the evaluator, we do it here locally, to avoid constant function calls.
+        join(left, right);
+
+        // Finalize the class.
+        finalize();
+    }
+
+    /**
+     * Join the left and the right graphs.
+     * @param left The left side of the join, in which the sources originate.
+     * @param right The right side of the join, in which the targets terminate.
+     */
+    void join(JoinGraph &left, JoinGraph &right) {
+        // We do the join block by block. First, instantiate pointers to the actual adjacency matrices to use.
+        std::vector<std::vector<Entry>*>* leftAdj = left.adj_ptr ? left.adj_ptr : &left.adj;
+        std::vector<std::vector<Entry>*>* rightAdj = right.adj_ptr ? right.adj_ptr : &right.adj;
+
+        // We want to make sure that the result of the join is sorted in block order, without duplicates.
+        // By using this assumption, we know that our input is always in sorted order as well.
+        std::vector<Entry> targets;
+
+        // Start iterating over all blocks.
+        for(uint32_t i = 0; i < leftAdj->size(); ++i) {
+            // Do a null check, as the value might be uninitialized.
+            if((*leftAdj)[i]) {
+
+                // Find all block locations we can go to from source block i.
+                for(const Entry &commonBlock : *(*leftAdj)[i]) {
+
+                    // Where can we go to from the common block?
+                    std::vector<Entry>* targetBlocks = (*rightAdj)[commonBlock.i];
+
+                    // Count the number of non zero insertions.
+                    uint32_t count = 0;
+
+                    // Do a null check, as the value might not exist.
+                    if(targetBlocks) {
+
+                        // Create the masks for our common block.
+                        uint64_t m1 = commonBlock.v & 0x0101010101010101;
+                        m1 |= m1 << 1 | m1 << 2 | m1 << 3 | m1 << 4 | m1 << 5  | m1 << 6 | m1 << 7;
+                        uint64_t m2 = (commonBlock.v >> 1) & 0x0101010101010101;
+                        m2 |= m2 << 1 | m2 << 2 | m2 << 3 | m2 << 4 | m2 << 5  | m2 << 6 | m2 << 7;
+                        uint64_t m3 = (commonBlock.v >> 2) & 0x0101010101010101;
+                        m3 |= m3 << 1 | m3 << 2 | m3 << 3 | m3 << 4 | m3 << 5  | m3 << 6 | m3 << 7;
+                        uint64_t m4 = (commonBlock.v >> 3) & 0x0101010101010101;
+                        m4 |= m4 << 1 | m4 << 2 | m4 << 3 | m4 << 4 | m4 << 5  | m4 << 6 | m4 << 7;
+                        uint64_t m5 = (commonBlock.v >> 4) & 0x0101010101010101;
+                        m5 |= m5 << 1 | m5 << 2 | m5 << 3 | m5 << 4 | m5 << 5  | m5 << 6 | m5 << 7;
+                        uint64_t m6 = (commonBlock.v >> 5) & 0x0101010101010101;
+                        m6 |= m6 << 1 | m6 << 2 | m6 << 3 | m6 << 4 | m6 << 5  | m6 << 6 | m6 << 7;
+                        uint64_t m7 = (commonBlock.v >> 6) & 0x0101010101010101;
+                        m7 |= m7 << 1 | m7 << 2 | m7 << 3 | m7 << 4 | m7 << 5  | m7 << 6 | m7 << 7;
+                        uint64_t m8 = (commonBlock.v >> 7) & 0x0101010101010101;
+                        m8 |= m8 << 1 | m8 << 2 | m8 << 3 | m8 << 4 | m8 << 5  | m8 << 6 | m8 << 7;
+
+                        /* Note that if bit k is set in row m of commonBlock.v, it indicates that vertex 8 * i + m
+                         * has vertex 8 * commonBlock.i + k as a target. Thus, to do the join, we should join on
+                         * the columns of the common block, instead of the rows.
+                         */
+
+                        // Iterate over all target blocks, and construct the new blocks.
+                        for(const Entry &targetBlock : *targetBlocks) {
+
+                            // Create the masks for this specific target block.
+                            uint64_t t1 = targetBlock.v & 0xff;
+                            t1 |= t1 << 8 | t1 << 16 | t1 << 24 | t1 << 32 | t1 << 40 | t1 << 48 | t1 << 56;
+                            uint64_t t2 = (targetBlock.v >> 8) & 0xff;
+                            t2 |= t2 << 8 | t2 << 16 | t2 << 24 | t2 << 32 | t2 << 40 | t2 << 48 | t2 << 56;
+                            uint64_t t3 = (targetBlock.v >> 8) & 0xff;
+                            t3 |= t3 << 8 | t3 << 16 | t3 << 24 | t3 << 32 | t3 << 40 | t3 << 48 | t3 << 56;
+                            uint64_t t4 = (targetBlock.v >> 8) & 0xff;
+                            t4 |= t4 << 8 | t4 << 16 | t4 << 24 | t4 << 32 | t4 << 40 | t4 << 48 | t4 << 56;
+                            uint64_t t5 = (targetBlock.v >> 8) & 0xff;
+                            t5 |= t5 << 8 | t5 << 16 | t5 << 24 | t5 << 32 | t5 << 40 | t5 << 48 | t5 << 56;
+                            uint64_t t6 = (targetBlock.v >> 8) & 0xff;
+                            t6 |= t6 << 8 | t6 << 16 | t6 << 24 | t6 << 32 | t6 << 40 | t6 << 48 | t6 << 56;
+                            uint64_t t7 = (targetBlock.v >> 8) & 0xff;
+                            t7 |= t7 << 8 | t7 << 16 | t7 << 24 | t7 << 32 | t7 << 40 | t7 << 48 | t7 << 56;
+                            uint64_t t8 = (targetBlock.v >> 8) & 0xff;
+                            t8 |= t8 << 8 | t8 << 16 | t8 << 24 | t8 << 32 | t8 << 40 | t8 << 48 | t8 << 56;
+
+                            // Set the v value using the masks above.
+                            uint64_t v = m1 & t1 | m2 & t2 | m3 & t3 | m4 & t4 | m5 & t5 | m6 & t6 | m7 & t7 | m8 & t8;
+
+                            // Create the new entry.
+                            if(v != 0ULL) {
+                                count++;
+
+                                // For now, the mask is zero. This will be altered when inserting the results.
+                                targets.push_back({targetBlock.i, 0, v});
+                            }
+                        }
+
+                        // Do an in place merge.
+                        std::inplace_merge(targets.begin(), targets.end() - count, targets.end());
+                    }
+                }
+
+                if(!targets.empty()) {
+                    Entry* entry_ptr = &targets.front();
+                    bool first = true;
+
+                    for(auto &entry : targets) {
+                        if(first) {
+                            // Do nothing.
+                            first = false;
+                        } else if(entry_ptr->i != entry.i) {
+                            // We know we are done with the current entry pointer, so set the mask.
+                            // The first eight bits denote if a value in a row exist.
+                            // The next eight bits denote if a value in a column exist.
+                            entry_ptr->masks |= ((entry_ptr->v &  0xFF) != 0)
+                                                | ((entry_ptr->v &  0xFF00) != 0) << 1
+                                                | ((entry_ptr->v &  0xFF0000) != 0) << 2
+                                                | ((entry_ptr->v &  0xFF000000) != 0) << 3
+                                                | ((entry_ptr->v &  0xFF00000000) != 0) << 4
+                                                | ((entry_ptr->v &  0xFF0000000000) != 0) << 5
+                                                | ((entry_ptr->v &  0xFF000000000000) != 0) << 6
+                                                | ((entry_ptr->v &  0xFF00000000000000) != 0) << 7;
+
+                            entry_ptr->masks |= ((entry_ptr->v & 0x0101010101010101) != 0) << 8
+                                                | ((entry_ptr->v & 0x0202020202020202) != 0) << 9
+                                                | ((entry_ptr->v & 0x0404040404040404) != 0) << 10
+                                                | ((entry_ptr->v & 0x0808080808080808) != 0) << 11
+                                                | ((entry_ptr->v & 0x1010101010101010) != 0) << 12
+                                                | ((entry_ptr->v & 0x2020202020202020) != 0) << 13
+                                                | ((entry_ptr->v & 0x4040404040404040) != 0) << 14
+                                                | ((entry_ptr->v & 0x8080808080808080) != 0) << 15;
+
+                            // The i value has changed, so change the pointer.
+                            entry_ptr = &entry;
+                        } else {
+                            // We found another occurrence of the same i value, so merge the flags.
+                            entry_ptr->v |= entry.v;
+                        }
+                    }
+
+                    // Set the mask for the last encountered entry.
+                    entry_ptr->masks |= ((entry_ptr->v &  0xFF) != 0)
+                                        | ((entry_ptr->v &  0xFF00) != 0) << 1
+                                        | ((entry_ptr->v &  0xFF0000) != 0) << 2
+                                        | ((entry_ptr->v &  0xFF000000) != 0) << 3
+                                        | ((entry_ptr->v &  0xFF00000000) != 0) << 4
+                                        | ((entry_ptr->v &  0xFF0000000000) != 0) << 5
+                                        | ((entry_ptr->v &  0xFF000000000000) != 0) << 6
+                                        | ((entry_ptr->v &  0xFF00000000000000) != 0) << 7;
+
+                    entry_ptr->masks |= ((entry_ptr->v & 0x0101010101010101) != 0) << 8
+                                        | ((entry_ptr->v & 0x0202020202020202) != 0) << 9
+                                        | ((entry_ptr->v & 0x0404040404040404) != 0) << 10
+                                        | ((entry_ptr->v & 0x0808080808080808) != 0) << 11
+                                        | ((entry_ptr->v & 0x1010101010101010) != 0) << 12
+                                        | ((entry_ptr->v & 0x2020202020202020) != 0) << 13
+                                        | ((entry_ptr->v & 0x4040404040404040) != 0) << 14
+                                        | ((entry_ptr->v & 0x8080808080808080) != 0) << 15;
+
+                    // Insert all the edges.
+                    auto it = std::unique(targets.begin(), targets.end(), [](const Entry& a, const Entry& n) {return a.i == n.i;});
+                    adj[i] = new std::vector<Entry>(static_cast<unsigned long>(std::distance(targets.begin(), it)));
+                    std::copy(targets.begin(), it, adj[i]->begin());
+
+                    // Set the number of edges plus the source and target flags.
+                    for(const auto &entry : *adj[i]) {
+                        noEdges += __builtin_popcountll(entry.v);
+                        JoinGraph::sources[i >> 3] |= (uint64_t(entry.masks) & 255) << (8 * (i & 7));
+                        JoinGraph::targets[entry.i >> 3] |= (uint64_t(entry.masks >> 8) & 255) << (8 * (entry.i & 7));
+                    }
+
+                    // Clear the cache of targets.
+                    targets.clear();
+                }
+            }
+        }
+    }
+
+    void finalize() {
+        noSources = countBitsSet(sources);
+        noTargets = countBitsSet(targets);
+    }
+
+    virtual ~JoinGraph() {
+        for(const auto &v : adj) {
             delete(v);
         }
     }

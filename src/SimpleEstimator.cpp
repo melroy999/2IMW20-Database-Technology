@@ -12,23 +12,23 @@ SimpleEstimator::SimpleEstimator(std::shared_ptr<SimpleGraph> &g){
 
 void SimpleEstimator::prepare() {
 
-//    // The number of bits we need to store all the vertices.
-//    auto noBins = static_cast<unsigned long>(ceil((double) graph->getNoVertices() / 64));
-//
-//    // Resize the join data matrix.
-//    joinData.resize(2 * graph->getNoLabels(), std::vector<joinStat>(2 * graph->getNoLabels()));
-//
-//    // Create a collection of label data.
-//    labelData = std::vector<labelStat>();
-//    for(uint32_t i = 0; i < 2 * graph->getNoLabels(); i++) {
-//        labelData.emplace_back(i, i % graph->getNoLabels(), i >= graph->getNoLabels(), graph);
-//    }
-//
-//    // Do this outside of the loop, as it somehow dereferences pointers if we don't.
-//    for(uint32_t i = 0; i < graph->getNoLabels(); i++) {
-//        labelData[i + graph->getNoLabels()].setTwin(&labelData[i]);
-//    }
-//
+    // The number of bits we need to store all the vertices.
+    auto noBins = static_cast<unsigned long>(ceil((double) graph->getNoVertices() / 64));
+
+    // Resize the join data matrix.
+    joinData.resize(2 * graph->getNoLabels(), std::vector<joinStat>(2 * graph->getNoLabels()));
+
+    // Create a collection of label data.
+    labelData = std::vector<labelStat>();
+    for(uint32_t i = 0; i < 2 * graph->getNoLabels(); i++) {
+        labelData.emplace_back(i, i % graph->getNoLabels(), i >= graph->getNoLabels(), graph->graphs[i % graph->getNoLabels()]);
+    }
+
+    // Do this outside of the loop, as it somehow dereferences pointers if we don't.
+    for(uint32_t i = 0; i < graph->getNoLabels(); i++) {
+        labelData[i + graph->getNoLabels()].setTwin(&labelData[i]);
+    }
+
 //    for(uint32_t label = 0; label < graph->getNoLabels(); label++) {
 //        for (uint32_t vertex = 0; vertex < graph->getNoVertices(); vertex++) {
 //            // Count which vertices have an out degree of one with respect to the current label.
@@ -40,19 +40,15 @@ void SimpleEstimator::prepare() {
 //                labelData[label].incrementTargetIn1();
 //        }
 //    }
-//
-//    for(uint32_t i = 0; i < graph->getNoLabels(); i++) {
-//        labelData[i].calculateSize();
-//    }
-//
-//    // Find all the join information.
-//    // Here, joining the labels i and j should correspond to inv(j), inv(i).
-//    for(uint32_t i = 0; i < 2 * graph->getNoLabels(); i++) {
-//        for(uint32_t j = 0; j < 2 * graph->getNoLabels(); j++) {
-//            joinData[i][j].join(&labelData[i], &labelData[j]);
-//        }
-//    }
-//
+
+    // Find all the join information.
+    // Here, joining the labels i and j should correspond to inv(j), inv(i).
+    for(uint32_t i = 0; i < 2 * graph->getNoLabels(); i++) {
+        for(uint32_t j = 0; j < 2 * graph->getNoLabels(); j++) {
+            joinData[i][j].join(&labelData[i], &labelData[j]);
+        }
+    }
+
 //    // Calculate the source and target nodes per label.
 //    for(auto &v : joinData) {
 //        for(auto &w : v) {
@@ -268,11 +264,6 @@ exCardStat SimpleEstimator::estimateJoin(exCardStat *leftStat, exCardStat *right
         unsigned long minimumDuplicateCount = leftData->getNumEdges() - leftData->getNumSources();
         noPaths -= minimumDuplicateCount;
     }
-
-    // How many of the given paths is a duplicate?
-    // For now, we just take the probability that the source and the target are equal:
-//        double pDuplicate = 1.0 / (leftData->getNumSources() + rightData->getNumTargets());
-//        noPaths *= (1 - pDuplicate);
 
     // Try to merge the two estimates with the join cardinality formula, with uniformity assumptions.
     return exCardStat {

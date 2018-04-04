@@ -169,9 +169,12 @@ void SimpleGraph::readFromContiguousFile(const std::string &fileName) {
         }
     }
 
+    uint32_t totalSize = 0;
     for(uint32_t i = 0; i < L; i++) {
         graphs[i].reportData(i);
+        totalSize += graphs[i].getSizeInBytes();
     }
+    std::cout << std::endl << "Total size in bytes: " << totalSize << std::endl;
 
     // Close the file, as we are done.
     file.close();

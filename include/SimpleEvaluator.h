@@ -28,7 +28,7 @@ class SimpleEvaluator : public Evaluator {
     std::map<std::string, cardStat> finalCache;
     #endif
     #ifdef RESULTS_CACHE
-    std::map<std::string, std::shared_ptr<SimpleGraph>> resultsCache;
+    std::map<std::string, std::shared_ptr<JoinGraph>> resultsCache;
     #endif
 
 public:
@@ -41,14 +41,13 @@ public:
 
     void attachEstimator(std::shared_ptr<SimpleEstimator> &e);
 
-    std::shared_ptr<SimpleGraph> evaluate_aux(RPQTree *q);
+    std::shared_ptr<JoinGraph> evaluate_aux(RPQTree *q);
     RPQTree * rewrite_query_tree(RPQTree *q);
     std::vector<std::string> get_query_graph(RPQTree *q, std::vector<std::string> nodes);
     std::string get_query_as_string(RPQTree *q);
-    static std::shared_ptr<SimpleGraph> project(uint32_t label, bool inverse, std::shared_ptr<SimpleGraph> &g);
-    std::shared_ptr<SimpleGraph> join(std::shared_ptr<SimpleGraph> &left, std::shared_ptr<SimpleGraph> &right);
-
-    static cardStat computeStats(std::shared_ptr<SimpleGraph> &g);
+    static std::shared_ptr<JoinGraph> project(uint32_t label, bool inverse, std::shared_ptr<SimpleGraph> &g);
+    std::shared_ptr<JoinGraph> join(std::shared_ptr<JoinGraph> &left, std::shared_ptr<JoinGraph> &right);
+    static cardStat computeStats(std::shared_ptr<JoinGraph> &g);
 
 };
 

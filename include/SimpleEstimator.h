@@ -68,27 +68,29 @@ struct labelStat {
 private:
 
     // The number of unique edges that use this label.
-    uint32_t numEdges{};
+    uint32_t noEdges{};
 
     // The sources and targets of the label, encoded as a bit collection.
     std::vector<uint64_t>* sources;
     std::vector<uint64_t>* targets;
-    uint32_t numSources{};
-    uint32_t numTargets{};
+    uint32_t noSources{};
+    uint32_t noTargets{};
 
     // The number of sources of the labelStat with source out degree 1 and target out degree 1.
     uint32_t sourceOut1{};
     uint32_t targetIn1{};
 
 public:
-    labelStat(uint32_t uid, uint32_t id, bool isInverse, std::shared_ptr<SimpleGraph> &g) {
+    labelStat(uint32_t uid, uint32_t id, bool isInverse, std::shared_ptr<BlockGraph> &g) {
 
         labelStat::uid = uid;
         labelStat::id = id;
         labelStat::isInverse = isInverse;
-//        sources = isInverse ? &g->targets[id] : &g->sources[id];
-//        targets = isInverse ? &g->sources[id] : &g->targets[id];
-//        numEdges = g->numEdges[id];
+        sources = isInverse ? &g->targets : &g->sources;
+        targets = isInverse ? &g->sources : &g->targets;
+        noSources = isInverse ? g->noTargets : g->noSources;
+        noTargets = isInverse ? g->noSources : g->noTargets;
+        noEdges = g->noEdges;
     }
 
     void setTwin(labelStat* twin) {
@@ -98,14 +100,9 @@ public:
 
     std::vector<uint64_t> *getSources() const { return isInverse ? twin -> getTargets() : sources; }
     std::vector<uint64_t> *getTargets() const { return isInverse ? twin -> getSources() : targets; }
-    const uint32_t getNumSources() const { return isInverse ? twin -> getNumTargets() : numSources; }
-    const uint32_t getNumTargets() const { return isInverse ? twin -> getNumSources() : numTargets; }
-    const uint32_t getNumEdges() const { return isInverse ? twin -> getNumEdges() : numEdges; }
-
-    void calculateSize() {
-//        numSources = countBitsSet(sources);
-//        numTargets = countBitsSet(targets);
-    }
+    const uint32_t getNumSources() const { return isInverse ? twin -> getNumTargets() : noSources; }
+    const uint32_t getNumTargets() const { return isInverse ? twin -> getNumSources() : noTargets; }
+    const uint32_t getNumEdges() const { return isInverse ? twin -> getNumEdges() : noEdges; }
 
     void incrementSourceOut1() {
         sourceOut1++;
