@@ -62,6 +62,11 @@ struct BlockGraph {
     uint32_t noTargets{};
     uint32_t noEdges{};
 
+    // The number of sources and targets having a degree of one.
+    uint32_t noSourcesDeg1{};
+    uint32_t noTargetsDeg1{};
+
+
     void setDataStructureSizes(uint32_t V) {
         adj = std::vector<std::vector<Entry>*>((V + 7) >> 3);
         reverse_adj = std::vector<std::vector<Entry>*>((V + 7) >> 3);
@@ -94,7 +99,7 @@ struct BlockGraph {
 
     uint32_t getSizeInBytes() {
         // The last part of this equation is the minimal size of the lists.
-        uint32_t size = sizeof(noSources) + sizeof(noTargets) + sizeof(noEdges)
+        uint32_t size = sizeof(noSources) + sizeof(noTargets) + sizeof(noEdges) + sizeof(noSourcesDeg1) + sizeof(noTargetsDeg1)
                         + 2 * (sizeof(std::vector<uint64_t>) + sizeof(uint64_t) * sources.size())
                         + 2 * (sizeof(std::vector<std::vector<Entry>*>) + sizeof(std::vector<Entry>*) * adj.size());
 
@@ -252,22 +257,29 @@ struct JoinGraph {
                         // Iterate over all target blocks, and construct the new blocks.
                         for(const Entry &targetBlock : *targetBlocks) {
 
+                            // What if, the masks indicate that we have no vertices in common?
+                            if(((commonBlock.masks >> 8) & targetBlock.masks) == 0 && ((commonBlock.masks) & targetBlock.masks >> 8) == 0) {
+
+                                // The result will be zero, so better proceed.
+                                continue;
+                            }
+
                             // Create the masks for this specific target block.
                             uint64_t t1 = targetBlock.v & 0xff;
                             t1 |= t1 << 8 | t1 << 16 | t1 << 24 | t1 << 32 | t1 << 40 | t1 << 48 | t1 << 56;
                             uint64_t t2 = (targetBlock.v >> 8) & 0xff;
                             t2 |= t2 << 8 | t2 << 16 | t2 << 24 | t2 << 32 | t2 << 40 | t2 << 48 | t2 << 56;
-                            uint64_t t3 = (targetBlock.v >> 8) & 0xff;
+                            uint64_t t3 = (targetBlock.v >> 16) & 0xff;
                             t3 |= t3 << 8 | t3 << 16 | t3 << 24 | t3 << 32 | t3 << 40 | t3 << 48 | t3 << 56;
-                            uint64_t t4 = (targetBlock.v >> 8) & 0xff;
+                            uint64_t t4 = (targetBlock.v >> 24) & 0xff;
                             t4 |= t4 << 8 | t4 << 16 | t4 << 24 | t4 << 32 | t4 << 40 | t4 << 48 | t4 << 56;
-                            uint64_t t5 = (targetBlock.v >> 8) & 0xff;
+                            uint64_t t5 = (targetBlock.v >> 32) & 0xff;
                             t5 |= t5 << 8 | t5 << 16 | t5 << 24 | t5 << 32 | t5 << 40 | t5 << 48 | t5 << 56;
-                            uint64_t t6 = (targetBlock.v >> 8) & 0xff;
+                            uint64_t t6 = (targetBlock.v >> 40) & 0xff;
                             t6 |= t6 << 8 | t6 << 16 | t6 << 24 | t6 << 32 | t6 << 40 | t6 << 48 | t6 << 56;
-                            uint64_t t7 = (targetBlock.v >> 8) & 0xff;
+                            uint64_t t7 = (targetBlock.v >> 48) & 0xff;
                             t7 |= t7 << 8 | t7 << 16 | t7 << 24 | t7 << 32 | t7 << 40 | t7 << 48 | t7 << 56;
-                            uint64_t t8 = (targetBlock.v >> 8) & 0xff;
+                            uint64_t t8 = (targetBlock.v >> 56) & 0xff;
                             t8 |= t8 << 8 | t8 << 16 | t8 << 24 | t8 << 32 | t8 << 40 | t8 << 48 | t8 << 56;
 
                             // Set the v value using the masks above.

@@ -110,28 +110,32 @@ void SimpleGraph::readFromContiguousFile(const std::string &fileName) {
         graph->setDataStructureSizes(V);
 
         // The current block x and y starting positions.
-        uint32_t px = 0;
-        uint32_t py = 0;
+        uint32_t px_b = 0;
+        uint32_t py_b = 0;
         uint64_t v = 0ULL;
         uint64_t w = 0ULL;
         uint32_t entryHelper = 0;
         bool first = true;
 
+        // For each label, keep a vector counting the number of occurrences of each source and target.
+        std::vector<uint8_t> sourceDegrees(V);
+        std::vector<uint8_t> targetDegrees(V);
+
         // Continue until we end up at another label.
         while(start != end) {
 
             // Which block is the pair in?
-            uint32_t x = (std::get<1>(*start) >> 3);
-            uint32_t y = (std::get<2>(*start) >> 3);
+            uint32_t x_b = (std::get<1>(*start) >> 3);
+            uint32_t y_b = (std::get<2>(*start) >> 3);
 
-            if(first || !(x == px && y == py)) {
+            if(first || !(x_b == px_b && y_b == py_b)) {
 
                 // Add the block to the graph.
-                graph->addEdge(px, py, {py, entryHelper, v}, {px, (entryHelper >> 8) | ((entryHelper & 255) << 8), w});
+                graph->addEdge(px_b, py_b, {py_b, entryHelper, v}, {px_b, (entryHelper >> 8) | ((entryHelper & 255) << 8), w});
 
                 // Set new previous values.
-                px = x;
-                py = y;
+                px_b = x_b;
+                py_b = y_b;
                 first = false;
 
                 // Reset the data.
@@ -139,6 +143,9 @@ void SimpleGraph::readFromContiguousFile(const std::string &fileName) {
                 w = 0ULL;
                 entryHelper = 0;
             }
+
+            ++sourceDegrees[std::get<1>(*start)];
+            ++targetDegrees[std::get<2>(*start)];
 
             // A set of bits denoting whether a row or column has values.
             entryHelper |= SET_BIT(std::get<1>(*start) & 7);
@@ -152,7 +159,13 @@ void SimpleGraph::readFromContiguousFile(const std::string &fileName) {
         }
 
         // Flush the remaining data.
-        graph->addEdge(px, py, {py, entryHelper, v}, {px, (entryHelper >> 8) | ((entryHelper & 255) << 8), w});
+        graph->addEdge(px_b, py_b, {py_b, entryHelper, v}, {px_b, (entryHelper >> 8) | ((entryHelper & 255) << 8), w});
+
+        // Set the number of source and target vertices having degree 1.
+        for(uint32_t k = 0; k < sourceDegrees.size(); k++) {
+            if(sourceDegrees[k] == 1) ++graph->noSourcesDeg1;
+            if(targetDegrees[k] == 1) ++graph->noTargetsDeg1;
+        }
 
         // Finalize the graph.
         graph->finalize();

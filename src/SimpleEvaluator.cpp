@@ -44,7 +44,7 @@ std::shared_ptr<JoinGraph> SimpleEvaluator::project(uint32_t projectLabel, bool 
 
 std::shared_ptr<JoinGraph> SimpleEvaluator::join(std::shared_ptr<JoinGraph> &left, std::shared_ptr<JoinGraph> &right) {
 
-    return std::make_shared<JoinGraph>(left, right);
+    return std::make_shared<JoinGraph>(*left.get(), *right.get());
 }
 
 // project out the label in the AST
@@ -224,6 +224,9 @@ cardStat SimpleEvaluator::evaluate(RPQTree *query) {
     std::shared_ptr<JoinGraph> res;
     if(est){
         auto optimized_query = rewrite_query_tree(query);
+//        std::cout << std::endl << "Optimized query tree: ";
+//        optimized_query->print();
+
         res = evaluate_aux(optimized_query);
 
         if(query->isConcat()) {

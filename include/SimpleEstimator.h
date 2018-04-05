@@ -81,16 +81,18 @@ private:
     uint32_t targetIn1{};
 
 public:
-    labelStat(uint32_t uid, uint32_t id, bool isInverse, std::shared_ptr<BlockGraph> &g) {
+    labelStat(uint32_t uid, uint32_t id, bool isInverse, BlockGraph &g) {
 
         labelStat::uid = uid;
         labelStat::id = id;
         labelStat::isInverse = isInverse;
-        sources = isInverse ? &g->targets : &g->sources;
-        targets = isInverse ? &g->sources : &g->targets;
-        noSources = isInverse ? g->noTargets : g->noSources;
-        noTargets = isInverse ? g->noSources : g->noTargets;
-        noEdges = g->noEdges;
+        sources = isInverse ? &g.targets : &g.sources;
+        targets = isInverse ? &g.sources : &g.targets;
+        noSources = isInverse ? g.noTargets : g.noSources;
+        noTargets = isInverse ? g.noSources : g.noTargets;
+        sourceOut1 = isInverse ? g.noTargetsDeg1 : g.noSourcesDeg1;
+        targetIn1 = isInverse ? g.noSourcesDeg1 : g.noTargetsDeg1;
+        noEdges = g.noEdges;
     }
 
     void setTwin(labelStat* twin) {
@@ -103,14 +105,6 @@ public:
     const uint32_t getNumSources() const { return isInverse ? twin -> getNumTargets() : noSources; }
     const uint32_t getNumTargets() const { return isInverse ? twin -> getNumSources() : noTargets; }
     const uint32_t getNumEdges() const { return isInverse ? twin -> getNumEdges() : noEdges; }
-
-    void incrementSourceOut1() {
-        sourceOut1++;
-    }
-
-    void incrementTargetIn1() {
-        targetIn1++;
-    }
 
     uint32_t getSourceOut1() const {
         return isInverse ? twin -> targetIn1 : sourceOut1;
@@ -156,8 +150,8 @@ struct joinStat {
         joinStat::source = source->uid;
         joinStat::target = target->uid;
 
-//        commonNodes = doAnd(source->getTargets(), target->getSources());
-//        numCommonNodes = countBitsSet(&commonNodes);
+        commonNodes = doAnd(*source->getTargets(), *target->getSources());
+        numCommonNodes = countBitsSet(commonNodes);
 
         // If the set of common nodes is empty, free the space of the vector.
         if(numCommonNodes == 0) {

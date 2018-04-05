@@ -29,18 +29,6 @@ void SimpleEstimator::prepare() {
         labelData[i + graph->getNoLabels()].setTwin(&labelData[i]);
     }
 
-//    for(uint32_t label = 0; label < graph->getNoLabels(); label++) {
-//        for (uint32_t vertex = 0; vertex < graph->getNoVertices(); vertex++) {
-//            // Count which vertices have an out degree of one with respect to the current label.
-//            if (graph->adj[label][vertex] && graph->adj[label][vertex]->size() == 1)
-//                labelData[label].incrementSourceOut1();
-//
-//            // Count which vertices have an in degree of one with respect to the current label.
-//            if (graph->reverse_adj[label][vertex] && graph->reverse_adj[label][vertex]->size() == 1)
-//                labelData[label].incrementTargetIn1();
-//        }
-//    }
-
     // Find all the join information.
     // Here, joining the labels i and j should correspond to inv(j), inv(i).
     for(uint32_t i = 0; i < 2 * graph->getNoLabels(); i++) {
