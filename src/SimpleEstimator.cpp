@@ -37,84 +37,103 @@ void SimpleEstimator::prepare() {
         }
     }
 
-//    // Calculate the source and target nodes per label.
-//    for(auto &v : joinData) {
-//        for(auto &w : v) {
-//
-//            // The total number of paths, and the distinct number of pairs.
-//            uint32_t paths = 0;
-//
-//            // We dont want to waste time on joins without any edges.
-//            if(w.numCommonNodes != 0) {
-//
-//                // Change the bucket size of the source and target collections to fit all the vertices.
-//                w.changeBucketSize(noBins);
-//
-//                for(uint32_t i = 0; i < w.commonNodes.size(); i++) {
-//                    auto bucket = w.commonNodes[i];
-//
-//                    if(bucket != 0ULL) {
-//                        for(uint32_t j = 0; j < 64; j++) {
-//                            if(CHECK_BIT(bucket, j)) {
-//
-//                                std::vector<uint32_t>* sourceVertices = w.source < graph->getNoLabels() ?
-//                                               graph->reverse_adj[w.source % graph->getNoLabels()][i * 64 + j] :
-//                                               graph->adj[w.source % graph->getNoLabels()][i * 64 + j];
-//
-//                                std::vector<uint32_t>* targetVertices = w.target < graph->getNoLabels() ?
-//                                                                        graph->adj[w.target % graph->getNoLabels()][i * 64 + j] :
-//                                                                        graph->reverse_adj[w.target % graph->getNoLabels()][i * 64 + j];
-//
-//                                if(sourceVertices && targetVertices) {
-//                                    int sources = 0;
-//
-//                                    // Filter out duplicates.
-//                                    uint32_t prevTarget = 0;
-//                                    bool first = true;
-//
-//                                    for(const auto &target : *sourceVertices)
-//                                    {
-//                                        if (first || prevTarget != target) {
-//                                            w.sourceNodes[target / 64] |= SET_BIT(target);
-//                                            sources++;
-//                                            w.numSourceEdges++;
-//
-//                                            first = false;
-//                                            prevTarget = target;
-//                                        }
-//                                    }
-//
-//                                    prevTarget = 0;
-//                                    first = true;
-//
-//                                    int targets = 0;
-//                                    for(const auto &target : *targetVertices)
-//                                    {
-//                                        if (first || prevTarget != target) {
-//                                            w.targetNodes[target / 64] |= SET_BIT(target);
-//                                            targets++;
-//                                            w.numTargetEdges++;
-//
-//                                            first = false;
-//                                            prevTarget = target;
-//                                        }
-//                                    }
-//
-//                                    paths += sources * targets;
-//                                }
-//
-//
-//                            }
-//                        }
-//                    }
-//                }
-//            }
-//
-//            w.numPaths = paths;
-//            w.numSourceNodes = countBitsSet(&w.sourceNodes);
-//            w.numTargetNodes = countBitsSet(&w.targetNodes);
-//        }
-//    }
+
+    #define CHECK_BIT(var,pos) ((var) & (1ULL<<(pos)))
+
+    // Calculate the required 2-gram join statistics.
+    for(auto &v : joinData) {
+        for(auto &w : v) {
+
+            // We dont want to waste time on joins without any edges.
+            if(w.numCommonNodes != 0) {
+                // The total number of paths, and the distinct number of pairs.
+                uint32_t paths = 0;
+
+                // Change the bucket size of the source and target collections to fit all the vertices.
+                w.changeBucketSize(noBins);
+
+                // Create pointers to the appropriate adjacency lists.
+                std::vector<std::vector<Entry>*>* sourceAdj = w.source < graph->getNoLabels() ?
+                                                &graph->graphs[w.source % graph->getNoLabels()].reverse_adj:
+                                                &graph->graphs[w.source % graph->getNoLabels()].adj;
+
+                std::vector<std::vector<Entry>*>* targetAdj = w.target < graph->getNoLabels() ?
+                                                &graph->graphs[w.target % graph->getNoLabels()].adj:
+                                                &graph->graphs[w.target % graph->getNoLabels()].reverse_adj;
+
+                // For each of the common blocks
+                for(uint32_t i = 0; i < w.commonNodes.size(); i++) {
+                    auto bucket = w.commonNodes[i];
+
+                    if(bucket != 0ULL) {
+                        // Now, decompress each block in the common range j to j + 8.
+                        for(uint32_t j = 0; j < 8; j++) {
+                            // Check if the block has any values in the bucket.
+                            if((bucket & 255) == 0) {
+                                // If not, skip.
+                                bucket >>= 8;
+                                continue;
+                            }
+
+                            bucket >>= 8;
+
+                            std::vector<Entry>* sourceBlocks = (*sourceAdj)[(i << 3) + j];
+                            std::vector<Entry>* targetBlocks = (*targetAdj)[(i << 3) + j];
+
+                            // We want that both collections are non-null, otherwise there are no join results.
+                            if(sourceBlocks && targetBlocks) {
+
+                                // Since both are non null, we can decompress the data.
+                                std::vector<std::vector<uint32_t>> sources(8);
+                                std::vector<std::vector<uint32_t>> targets(8);
+
+                                for(const Entry &e : *sourceBlocks) {
+                                    // Check each bit position.
+                                    for(uint32_t u = 0; u < 64; u++) {
+                                        if(CHECK_BIT(e.v, u)) {
+                                            sources[u >> 3].push_back((e.i << 3) + (u & 7));
+                                        }
+                                    }
+                                }
+
+                                for(const Entry &e : *targetBlocks) {
+                                    // Check each bit position.
+                                    for(uint32_t u = 0; u < 64; u++) {
+                                        if(CHECK_BIT(e.v, u)) {
+                                            targets[u >> 3].push_back((e.i << 3) + (u & 7));
+                                        }
+                                    }
+                                }
+
+                                // Set the source and target flags, and calculate the number of paths.
+                                for(uint32_t u = 0; u < 8; u++) {
+                                    if(sources[u].empty() || targets[u].empty()) {
+                                        continue;
+                                    }
+
+                                    w.numSourceEdges += sources[u].size();
+                                    w.numTargetEdges += targets[u].size();
+                                    paths += sources[u].size() * targets[u].size();
+
+                                    for(const auto &vertex : sources[u]) {
+                                        w.sourceNodes[vertex >> 6] |= SET_BIT(vertex & 63);
+                                    }
+
+                                    for(const auto &vertex : targets[u]) {
+                                        w.targetNodes[vertex >> 6] |= SET_BIT(vertex & 63);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                w.numPaths = paths;
+                w.numSourceNodes = countBitsSet(w.sourceNodes);
+                w.numTargetNodes = countBitsSet(w.targetNodes);
+            }
+        }
+    }
 }
 
 cardStat SimpleEstimator::estimate(RPQTree *q) {

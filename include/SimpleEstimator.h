@@ -139,7 +139,6 @@ struct joinStat {
     uint32_t numPaths;
     uint32_t numSourceEdges;
     uint32_t numTargetEdges;
-    uint32_t uniquePaths;
 
     void changeBucketSize(unsigned long noBins) {
         sourceNodes.resize(noBins);
@@ -163,7 +162,7 @@ struct joinStat {
         std::cout << "Join " << source << "x" << target << ": #numCommonNodes=" << std::left << std::setw(8)
                   << numCommonNodes << "#numSourceNodes=" << std::setw(10) << numSourceNodes << "#numTargetNodes="
                   << std::setw(8) << numTargetNodes << "#numPaths="  << std::setw(8) << numPaths << "#numSourceEdges="
-                  << std::setw(8) << numSourceEdges << "#numTargetEdges="  << std::setw(8) << numTargetEdges << "#uniquePaths="  << std::setw(8) << uniquePaths << std::endl;
+                  << std::setw(8) << numSourceEdges << "#numTargetEdges="  << std::setw(8) << numTargetEdges << std::endl;
 
     }
 };
