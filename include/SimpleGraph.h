@@ -232,23 +232,23 @@ struct JoinGraph {
                     if(targetBlocks) {
 
                         // Create the masks for our common block.
-                        uint64_t m1 = commonBlock.v & 0x0101010101010101;
-                        m1 |= m1 << 1 | m1 << 2 | m1 << 3 | m1 << 4 | m1 << 5  | m1 << 6 | m1 << 7;
+                        uint64_t m1 = commonBlock.v & 0x0101010101010101; 
+                        m1 |= m1 << 1; m1 |= m1 << 2; m1 |= m1 << 4;
                         uint64_t m2 = (commonBlock.v >> 1) & 0x0101010101010101;
-                        m2 |= m2 << 1 | m2 << 2 | m2 << 3 | m2 << 4 | m2 << 5  | m2 << 6 | m2 << 7;
+                        m2 |= m2 << 1; m2 |= m2 << 2; m2 |= m2 << 4;
                         uint64_t m3 = (commonBlock.v >> 2) & 0x0101010101010101;
-                        m3 |= m3 << 1 | m3 << 2 | m3 << 3 | m3 << 4 | m3 << 5  | m3 << 6 | m3 << 7;
+                        m3 |= m3 << 1; m3 |= m3 << 2; m3 |= m3 << 4;
                         uint64_t m4 = (commonBlock.v >> 3) & 0x0101010101010101;
-                        m4 |= m4 << 1 | m4 << 2 | m4 << 3 | m4 << 4 | m4 << 5  | m4 << 6 | m4 << 7;
+                        m4 |= m4 << 1; m4 |= m4 << 2; m4 |= m4 << 4;
                         uint64_t m5 = (commonBlock.v >> 4) & 0x0101010101010101;
-                        m5 |= m5 << 1 | m5 << 2 | m5 << 3 | m5 << 4 | m5 << 5  | m5 << 6 | m5 << 7;
+                        m5 |= m5 << 1; m5 |= m5 << 2; m5 |= m5 << 4;
                         uint64_t m6 = (commonBlock.v >> 5) & 0x0101010101010101;
-                        m6 |= m6 << 1 | m6 << 2 | m6 << 3 | m6 << 4 | m6 << 5  | m6 << 6 | m6 << 7;
+                        m6 |= m6 << 1; m6 |= m6 << 2; m6 |= m6 << 4;
                         uint64_t m7 = (commonBlock.v >> 6) & 0x0101010101010101;
-                        m7 |= m7 << 1 | m7 << 2 | m7 << 3 | m7 << 4 | m7 << 5  | m7 << 6 | m7 << 7;
+                        m7 |= m7 << 1; m7 |= m7 << 2; m7 |= m7 << 4;
                         uint64_t m8 = (commonBlock.v >> 7) & 0x0101010101010101;
-                        m8 |= m8 << 1 | m8 << 2 | m8 << 3 | m8 << 4 | m8 << 5  | m8 << 6 | m8 << 7;
-
+                        m8 |= m8 << 1; m8 |= m8 << 2; m8 |= m8 << 4;
+                        
                         /* Note that if bit k is set in row m of commonBlock.v, it indicates that vertex 8 * i + m
                          * has vertex 8 * commonBlock.i + k as a target. Thus, to do the join, we should join on
                          * the columns of the common block, instead of the rows.
@@ -266,21 +266,21 @@ struct JoinGraph {
 
                             // Create the masks for this specific target block.
                             uint64_t t1 = targetBlock.v & 0xff;
-                            t1 |= t1 << 8 | t1 << 16 | t1 << 24 | t1 << 32 | t1 << 40 | t1 << 48 | t1 << 56;
+                            t1 |= t1 << 8; t1 |= t1 << 16; t1 |= t1 << 32;
                             uint64_t t2 = (targetBlock.v >> 8) & 0xff;
-                            t2 |= t2 << 8 | t2 << 16 | t2 << 24 | t2 << 32 | t2 << 40 | t2 << 48 | t2 << 56;
+                            t2 |= t2 << 8; t2 |= t2 << 16; t2 |= t2 << 32;
                             uint64_t t3 = (targetBlock.v >> 16) & 0xff;
-                            t3 |= t3 << 8 | t3 << 16 | t3 << 24 | t3 << 32 | t3 << 40 | t3 << 48 | t3 << 56;
+                            t3 |= t3 << 8; t3 |= t3 << 16; t3 |= t3 << 32;
                             uint64_t t4 = (targetBlock.v >> 24) & 0xff;
-                            t4 |= t4 << 8 | t4 << 16 | t4 << 24 | t4 << 32 | t4 << 40 | t4 << 48 | t4 << 56;
+                            t4 |= t4 << 8; t4 |= t4 << 16; t4 |= t4 << 32;
                             uint64_t t5 = (targetBlock.v >> 32) & 0xff;
-                            t5 |= t5 << 8 | t5 << 16 | t5 << 24 | t5 << 32 | t5 << 40 | t5 << 48 | t5 << 56;
+                            t5 |= t5 << 8; t5 |= t5 << 16; t5 |= t5 << 32;
                             uint64_t t6 = (targetBlock.v >> 40) & 0xff;
-                            t6 |= t6 << 8 | t6 << 16 | t6 << 24 | t6 << 32 | t6 << 40 | t6 << 48 | t6 << 56;
+                            t6 |= t6 << 8; t6 |= t6 << 16; t6 |= t6 << 32;
                             uint64_t t7 = (targetBlock.v >> 48) & 0xff;
-                            t7 |= t7 << 8 | t7 << 16 | t7 << 24 | t7 << 32 | t7 << 40 | t7 << 48 | t7 << 56;
+                            t7 |= t7 << 8; t7 |= t7 << 16; t7 |= t7 << 32;
                             uint64_t t8 = (targetBlock.v >> 56) & 0xff;
-                            t8 |= t8 << 8 | t8 << 16 | t8 << 24 | t8 << 32 | t8 << 40 | t8 << 48 | t8 << 56;
+                            t8 |= t8 << 8; t8 |= t8 << 16; t8 |= t8 << 32;
 
                             // Set the v value using the masks above.
                             uint64_t v = m1 & t1 | m2 & t2 | m3 & t3 | m4 & t4 | m5 & t5 | m6 & t6 | m7 & t7 | m8 & t8;
