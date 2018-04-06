@@ -5,7 +5,6 @@
 #ifndef QS_EVALUATOR_H
 #define QS_EVALUATOR_H
 
-
 #include <memory>
 #include "Graph.h"
 #include "Estimator.h"

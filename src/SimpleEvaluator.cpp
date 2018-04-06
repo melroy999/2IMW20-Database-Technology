@@ -93,6 +93,11 @@ std::shared_ptr<JoinGraph> SimpleEvaluator::evaluate_aux(RPQTree *q) {
         // join left with right
 
         std::shared_ptr<JoinGraph> result = SimpleEvaluator::join(leftGraph, rightGraph);
+        #ifdef EVALUATOR_DEBUGGING
+        std::cout << std::endl << "Memory usage of subquery: ";
+        q->print();
+        std::cout << " = " << result->getSizeInBytes();
+        #endif
 
         #ifdef RESULTS_CACHE
         resultsCache.insert(std::make_pair(queryString, result));
@@ -224,8 +229,11 @@ cardStat SimpleEvaluator::evaluate(RPQTree *query) {
     std::shared_ptr<JoinGraph> res;
     if(est){
         auto optimized_query = rewrite_query_tree(query);
-//        std::cout << std::endl << "Optimized query tree: ";
-//        optimized_query->print();
+
+        #ifdef EVALUATOR_DEBUGGING
+        std::cout << std::endl << "Optimized query tree: ";
+        optimized_query->print();
+        #endif
 
         res = evaluate_aux(optimized_query);
 

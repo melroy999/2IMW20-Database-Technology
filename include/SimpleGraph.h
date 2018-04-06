@@ -99,7 +99,7 @@ struct BlockGraph {
 
     uint32_t getSizeInBytes() {
         // The last part of this equation is the minimal size of the lists.
-        uint32_t size = sizeof(noSources) + sizeof(noTargets) + sizeof(noEdges) + sizeof(noSourcesDeg1) + sizeof(noTargetsDeg1)
+        uint32_t size = sizeof(noSources) + sizeof(noTargets) + sizeof(noEdges) + sizeof(noSourcesDeg1) + sizeof(noTargetsDeg1)+ sizeof(noTargets) + sizeof(noEdges)
                         + 2 * (sizeof(std::vector<uint64_t>) + sizeof(uint64_t) * sources.size())
                         + 2 * (sizeof(std::vector<std::vector<Entry>*>) + sizeof(std::vector<Entry>*) * adj.size());
 
@@ -373,6 +373,21 @@ struct JoinGraph {
                 }
             }
         }
+    }
+
+    uint32_t getSizeInBytes() {
+        // The last part of this equation is the minimal size of the lists.
+        uint32_t size = sizeof(noSources) + sizeof(noTargets) + sizeof(noEdges) + sizeof(adj_ptr) + sizeof(sources_ptr)
+                        + 2 * (sizeof(std::vector<uint64_t>) + sizeof(uint64_t) * sources.size())
+                        + sizeof(std::vector<std::vector<Entry>*>) + sizeof(std::vector<Entry>*) * adj.size();
+
+        for(const auto &v : adj) {
+            if(v) {
+                size += sizeof(std::vector<Entry>) + sizeof(Entry) * v->size();
+            }
+        }
+
+        return size;
     }
 
     void finalize() {

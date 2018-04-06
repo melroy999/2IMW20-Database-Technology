@@ -182,6 +182,7 @@ void SimpleGraph::readFromContiguousFile(const std::string &fileName) {
         }
     }
 
+    #ifdef EVALUATOR_DEBUGGING
     uint32_t totalSize = 0;
     for(uint32_t i = 0; i < L; i++) {
         graphs[i].reportData(i);
@@ -191,4 +192,5 @@ void SimpleGraph::readFromContiguousFile(const std::string &fileName) {
 
     // Close the file, as we are done.
     file.close();
+    #endif
 }

@@ -5,6 +5,8 @@
 #ifndef QS_GRAPH_H
 #define QS_GRAPH_H
 
+//#define EVALUATOR_DEBUGGING
+
 #include <unordered_map>
 
 class Graph {
