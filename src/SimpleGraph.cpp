@@ -13,21 +13,9 @@ void SimpleJoinStorage::addEdges(uint32_t from, std::vector<uint32_t> &data, std
     std::copy(data.begin(), end, adj[from]->begin());
     noEdges += adj[from]->size();
 
-    if(from < minSource) {
-        minSource = from;
-    } else if(from > maxSource) {
-        maxSource = from;
-    }
-
     sources[from >> 6] |= SET_BIT(from & 63);
     for(const auto to : *adj[from]) {
         targets[to >> 6] |= SET_BIT(to & 63);
-
-//        if(to < minTarget) {
-//            minTarget = to;
-//        } else if(to > maxTarget) {
-//            maxTarget = to;
-//        }
     }
 }
 
@@ -45,10 +33,6 @@ SimpleJoinStorage::SimpleJoinStorage(uint32_t n, uint32_t N) {
     setNoBuckets(N);
     this->n = n;
     this->N = N;
-    minSource = n - 1;
-    minTarget = n - 1;
-    maxSource = 0;
-    maxTarget = 0;
 }
 
 SimpleJoinStorage::SimpleJoinStorage(SimpleGraphStorage &storage, bool isInverse) {
@@ -61,19 +45,11 @@ SimpleJoinStorage::SimpleJoinStorage(SimpleGraphStorage &storage, bool isInverse
         sources_ptr = &storage.targets;
         noSources = storage.noTargets;
         noTargets = storage.noSources;
-        minSource = storage.minTarget;
-        maxSource = storage.maxTarget;
-        minTarget = storage.minSource;
-        maxTarget = storage.maxSource;
     } else {
         adj_ptr = &storage.adj;
         sources_ptr = &storage.sources;
         noSources = storage.noSources;
         noTargets = storage.noTargets;
-        minTarget = storage.minTarget;
-        maxTarget = storage.maxTarget;
-        minSource = storage.minSource;
-        maxSource = storage.maxSource;
     }
 }
 
@@ -104,10 +80,6 @@ SimpleGraphStorage::SimpleGraphStorage(uint32_t n, uint32_t N) {
     setNoBuckets(N);
     this->n = n;
     this->N = N;
-    minSource = n - 1;
-    minTarget = n - 1;
-    maxSource = 0;
-    maxTarget = 0;
 }
 
 void SimpleGraphStorage::finalize() {
@@ -123,12 +95,6 @@ void SimpleGraphStorage::addEdge(uint32_t from, uint32_t to) {
 
     if(!adj[from]) {
         adj[from] = new std::vector<uint32_t>();
-
-        if(from < minSource) {
-            minSource = from;
-        } else if(from > maxSource) {
-            maxSource = from;
-        }
     }
 
     adj[from]->emplace_back(to);
@@ -136,12 +102,6 @@ void SimpleGraphStorage::addEdge(uint32_t from, uint32_t to) {
     if(!reverse_adj.empty()) {
         if(!reverse_adj[to]) {
             reverse_adj[to] = new std::vector<uint32_t>();
-
-            if(to < minTarget) {
-                minTarget = to;
-            } else if(to > maxTarget) {
-                maxTarget = to;
-            }
         }
 
         reverse_adj[to]->emplace_back(from);

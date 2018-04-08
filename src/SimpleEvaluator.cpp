@@ -60,7 +60,7 @@ std::shared_ptr<SimpleJoinStorage> SimpleEvaluator::join(std::shared_ptr<SimpleJ
     auto buckets = left->adj_ptr ? left->sources_ptr: &left->sources;
 
     // Use the minimal and maximal source numbers encountered as a start and end point.
-    for(uint32_t i = left->minSource >> 6; i < ceil((double) left->maxSource / 64); ++i) {
+    for(uint32_t i = 0; i < buckets->size(); ++i) {
         auto bucket = (*buckets)[i];
 
         if(bucket != 0ULL) {
@@ -126,10 +126,12 @@ std::shared_ptr<SimpleJoinStorage> SimpleEvaluator::evaluate_aux(RPQTree *q) {
 
         std::string queryString = get_query_as_string(q);
 
+        #ifdef RESULTS_CACHE
         if(resultsCache.find(queryString) != resultsCache.end()){
 
             return resultsCache[queryString];
         }
+        #endif
 
         // evaluate the children
         auto leftGraph = SimpleEvaluator::evaluate_aux(q->left);
@@ -139,7 +141,9 @@ std::shared_ptr<SimpleJoinStorage> SimpleEvaluator::evaluate_aux(RPQTree *q) {
 
         std::shared_ptr<SimpleJoinStorage> result = SimpleEvaluator::join(leftGraph, rightGraph);
 
+        #ifdef RESULTS_CACHE
         resultsCache.insert(std::make_pair(queryString, result));
+        #endif
 
         return result;
     }
@@ -218,18 +222,22 @@ RPQTree * SimpleEvaluator::rewrite_query_tree(RPQTree *query) {
 
             // Check if this query pair exists in the estimator cache
 
+            #ifdef EST_CACHE
             if(estCache.find(queryPair) != estCache.end()){
 
                 estimates.push_back(estCache[queryPair]);
             }
             else{
-
+            #endif
                 auto queryTree = RPQTree::strToTree(queryPair);
                 cardStat estimate = est->estimate(queryTree);
                 delete(queryTree);
                 estimates.push_back(estimate.noPaths);
+
+            #ifdef EST_CACHE
                 estCache.insert(std::make_pair(queryPair, estimate.noPaths));
             }
+            #endif
         }
 
         long min_index = std::min_element(estimates.begin(), estimates.end()) - estimates.begin();
@@ -253,10 +261,12 @@ cardStat SimpleEvaluator::evaluate(RPQTree *query) {
 
     std::string queryString = get_query_as_string(query);
 
+    #ifdef FINAL_CACHE
     if(finalCache.find(queryString) != finalCache.end()){
 
         return finalCache[queryString];
     }
+    #endif
 
     std::shared_ptr<SimpleJoinStorage> res;
     if(est){
@@ -272,7 +282,9 @@ cardStat SimpleEvaluator::evaluate(RPQTree *query) {
 
     auto stats = SimpleEvaluator::computeStats(res);
 
+    #ifdef FINAL_CACHE
     finalCache.insert(std::make_pair(queryString, stats));
+    #endif
 
     return stats;
 }

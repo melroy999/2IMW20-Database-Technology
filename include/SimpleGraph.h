@@ -56,12 +56,6 @@ public:
     uint32_t noSources{};
     uint32_t noTargets{};
 
-    // Store the minimum and maximum source/target numbers encountered.
-    uint32_t minSource;
-    uint32_t maxSource;
-    uint32_t minTarget;
-    uint32_t maxTarget;
-
     // The sizes of the storage.
     uint32_t n;
     uint32_t N;
@@ -96,12 +90,6 @@ public:
     uint32_t noEdges{};
     uint32_t noSources{};
     uint32_t noTargets{};
-
-    // Store the minimum and maximum source/target numbers encountered.
-    uint32_t minSource;
-    uint32_t maxSource;
-    uint32_t minTarget;
-    uint32_t maxTarget;
 
     // The sizes of the storage.
     uint32_t n;
