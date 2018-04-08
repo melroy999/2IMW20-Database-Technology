@@ -56,6 +56,12 @@ public:
     uint32_t noSources{};
     uint32_t noTargets{};
 
+    // THe minimum and maximum sources encountered.
+    uint32_t minSource;
+    uint32_t maxSource;
+    uint32_t minTarget;
+    uint32_t maxTarget;
+
     // The sizes of the storage.
     uint32_t n;
     uint32_t N;
@@ -83,13 +89,14 @@ public:
     // A pointer to the adjacency list, used when the storage is a leaf.
     std::vector<std::vector<uint32_t>*> *adj_ptr{};
 
-    // Pointers to the source and targets vectors, used when the storage is a leaf.
-    std::vector<uint64_t> *sources_ptr{};
-
     // The number of source and target vertices, plus the number of edges.
     uint32_t noEdges{};
     uint32_t noSources{};
     uint32_t noTargets{};
+
+    // THe minimum and maximum sources encountered.
+    uint32_t minSource;
+    uint32_t maxSource;
 
     // The sizes of the storage.
     uint32_t n;

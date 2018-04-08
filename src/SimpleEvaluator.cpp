@@ -56,35 +56,25 @@ std::shared_ptr<SimpleJoinStorage> SimpleEvaluator::join(std::shared_ptr<SimpleJ
     // By using this assumption, we know that our input is always in sorted order as well.
     std::vector<uint32_t> targets;
 
-    // Sort over the source blocks, such that we can skip empty blocks quickly.
-    auto buckets = left->adj_ptr ? left->sources_ptr: &left->sources;
-
     // Use the minimal and maximal source numbers encountered as a start and end point.
-    for(uint32_t i = 0; i < buckets->size(); ++i) {
-        auto bucket = (*buckets)[i];
+    for(uint32_t s = left->minSource; s < left->maxSource + 1; ++s) {
+        if((*leftMatrix)[s]) {
+            for (auto c : *(*leftMatrix)[s]) {
+                std::vector<uint32_t>* options = (*rightMatrix)[c];
 
-        if(bucket != 0ULL) {
-            for(uint32_t s = 64 * i; s < std::min<long>(64 * (i + 1), leftMatrix->size()); ++s) {
-
-                if((*leftMatrix)[s]) {
-                    for (auto c : *(*leftMatrix)[s]) {
-                        std::vector<uint32_t>* options = (*rightMatrix)[c];
-
-                        // Add the entirety of _targets to the end of targets, and call an in-place merge.
-                        if(options) {
-                            targets.insert(targets.end(), options->begin(), options->end());
-                            std::inplace_merge(targets.begin(), targets.end() - options->size(), targets.end());
-                        }
-                    }
-
-                    if(!targets.empty()) {
-                        // Do a batch insert, as we know the exact number of edges we create.
-                        auto ip = std::unique(targets.begin(), targets.end());
-                        out->addEdges(s, targets, ip);
-
-                        targets.clear();
-                    }
+                // Add the entirety of _targets to the end of targets, and call an in-place merge.
+                if(options) {
+                    targets.insert(targets.end(), options->begin(), options->end());
+                    std::inplace_merge(targets.begin(), targets.end() - options->size(), targets.end());
                 }
+            }
+
+            if(!targets.empty()) {
+                // Do a batch insert, as we know the exact number of edges we create.
+                auto ip = std::unique(targets.begin(), targets.end());
+                out->addEdges(s, targets, ip);
+
+                targets.clear();
             }
         }
     }

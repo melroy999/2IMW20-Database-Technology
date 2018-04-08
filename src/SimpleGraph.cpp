@@ -42,20 +42,43 @@ SimpleJoinStorage::SimpleJoinStorage(SimpleGraphStorage &storage, bool isInverse
 
     if(isInverse) {
         adj_ptr = &storage.reverse_adj;
-        sources_ptr = &storage.targets;
         noSources = storage.noTargets;
         noTargets = storage.noSources;
+        minSource = storage.minTarget;
+        maxSource = storage.maxTarget;
     } else {
         adj_ptr = &storage.adj;
-        sources_ptr = &storage.sources;
         noSources = storage.noSources;
         noTargets = storage.noTargets;
+        minSource = storage.minSource;
+        maxSource = storage.maxSource;
     }
 }
 
 void SimpleJoinStorage::finalize() {
     noSources = countBitsSet(sources);
     noTargets = countBitsSet(targets);
+
+    // Find the minimum and maximum source values.
+    minSource = 0;
+    for(const uint64_t &s : sources) {
+        if(s) {
+            minSource += __builtin_ctzll(s);
+            break;
+        }
+
+        minSource += 64;
+    }
+
+    maxSource = static_cast<uint32_t>(sources.size() * 64) - 1;
+    for(auto it = sources.rbegin(); it != sources.rend(); ++it) {
+        if(*it) {
+            maxSource -= __builtin_clzll(*it);
+            break;
+        }
+
+        maxSource -= 64;
+    }
 }
 
 
@@ -85,6 +108,49 @@ SimpleGraphStorage::SimpleGraphStorage(uint32_t n, uint32_t N) {
 void SimpleGraphStorage::finalize() {
     noSources = countBitsSet(sources);
     noTargets = countBitsSet(targets);
+
+    // Find the minimum and maximum source values.
+    minSource = 0;
+    for(const uint64_t &s : sources) {
+        if(s) {
+            minSource += __builtin_ctzll(s);
+            break;
+        }
+
+        minSource += 64;
+    }
+
+    maxSource = static_cast<uint32_t>(sources.size() * 64) - 1;
+    for(auto it = sources.rbegin(); it != sources.rend(); ++it) {
+        if(*it) {
+            maxSource -= __builtin_clzll(*it);
+            break;
+        }
+
+        maxSource -= 64;
+    }
+
+
+    // Find the minimum and maximum target values.
+    minTarget = 0;
+    for(const uint64_t &s : targets) {
+        if(s) {
+            minTarget += __builtin_ctzll(s);
+            break;
+        }
+
+        minTarget += 64;
+    }
+
+    maxTarget = static_cast<uint32_t>(targets.size() * 64) - 1;
+    for(auto it = targets.rbegin(); it != targets.rend(); ++it) {
+        if(*it) {
+            maxTarget -= __builtin_clzll(*it);
+            break;
+        }
+
+        maxTarget -= 64;
+    }
 }
 
 void SimpleGraphStorage::addEdge(uint32_t from, uint32_t to) {
