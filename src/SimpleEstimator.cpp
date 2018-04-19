@@ -129,6 +129,12 @@ void SimpleEstimator::prepare() {
             w.numPaths = paths;
             w.numSourceNodes = countBitsSet(w.sourceNodes);
             w.numTargetNodes = countBitsSet(w.targetNodes);
+
+            // Reset the source, target and common node vectors.
+            std::vector<uint64_t>().swap(w.sourceNodes);
+            std::vector<uint64_t>().swap(w.targetNodes);
+            std::vector<uint64_t>().swap(w.commonNodes);
+
         }
     }
 }

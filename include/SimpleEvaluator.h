@@ -7,7 +7,7 @@
 
 #define EST_CACHE
 #define FINAL_CACHE
-#define RESULTS_CACHE
+//#define RESULTS_CACHE
 
 #include <memory>
 #include <cmath>
