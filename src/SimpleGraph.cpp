@@ -79,6 +79,10 @@ void SimpleJoinStorage::finalize() {
 
         maxSource -= 64;
     }
+
+    // Clear unnecessary memory containers.
+    std::vector<uint64_t>().swap(targets);
+    std::vector<uint64_t>().swap(sources);
 }
 
 
