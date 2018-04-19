@@ -29,4 +29,5 @@ set(SOURCE_FILES
         src/SimpleEvaluator.cpp
         )
 
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g - pg")
 add_executable(quicksilver ${SOURCE_FILES} ${HEADER_FILES})
